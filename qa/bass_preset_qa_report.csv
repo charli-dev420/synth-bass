@@ -1,0 +1,211 @@
+Instrument,Preset,Family,MixRole,Tags,PeakDb,RmsDb,Status
+Contrebasse,Pizzicato Jazz,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-10.198,ok
+Contrebasse,Walking Bass,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-13.414,ok
+Contrebasse,Arco Lyrique,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-6.283,ok
+Contrebasse,Bossa Nova,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-14.090,ok
+Contrebasse,Cinématique,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-8.200,ok
+Contrebasse,Orchestrale Douce,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-7.042,ok
+Contrebasse,Tango Profond,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-13.438,ok
+Contrebasse,Bluegrass Percussif,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-14.139,ok
+Contrebasse,Jazz Club Feutré,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-7.565,ok
+Contrebasse,Solo Expressif,acoustic,lead-bass,"bass,factory,acoustic,double-bass",-1.110,-8.092,ok
+Contrebasse,Contrebasse Sombre,acoustic,organic-foundation,"bass,factory,acoustic,double-bass,dark",-1.110,-8.117,ok
+Contrebasse,Pizz Court,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-15.091,ok
+Contrebasse,Arco Dramatique,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-6.848,ok
+Contrebasse,Bois Ancien,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-8.308,ok
+Contrebasse,Groove Latin,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-13.513,ok
+Contrebasse,Swing Vintage,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-10.410,ok
+Contrebasse,Folk Rustique,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-12.520,ok
+Contrebasse,Chambre Intime,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-7.279,ok
+Contrebasse,Réggaé Roots,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-8.554,ok
+Contrebasse,Film Noir,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-5.218,ok
+Contrebasse,Contrebasse Brillante,acoustic,organic-foundation,"bass,factory,acoustic,double-bass,bright",-1.110,-13.587,ok
+Contrebasse,Sustain Lyrique,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-6.383,ok
+Contrebasse,Staccato Vif,acoustic,transient-bass,"bass,factory,acoustic,double-bass",-1.110,-12.152,ok
+Contrebasse,Warm Pad Bass,acoustic,texture-bass,"bass,factory,acoustic,double-bass,warm",-1.110,-6.071,ok
+Contrebasse,Percussivement Bois,acoustic,organic-foundation,"bass,factory,acoustic,double-bass",-1.110,-10.879,ok
+Basse Fingered,Groove Motown,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-11.893,ok
+Basse Fingered,Rock Solide,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-12.544,ok
+Basse Fingered,Jazz Fusion,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-12.800,ok
+Basse Fingered,Pop Ronde,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-9.896,ok
+Basse Fingered,Funk Doigts,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-13.182,ok
+Basse Fingered,R&B Velours,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass,warm",-1.110,-8.567,ok
+Basse Fingered,Indie Doux,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-10.478,ok
+Basse Fingered,Blues Profond,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-11.699,ok
+Basse Fingered,Gospel Punch,acoustic,transient-bass,"bass,factory,acoustic,fingered-bass",-1.110,-12.739,ok
+Basse Fingered,Country Road,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-12.842,ok
+Basse Fingered,Reggae Laid Back,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-7.613,ok
+Basse Fingered,Neo Soul,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-10.311,ok
+Basse Fingered,Alt Rock Grit,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass,driven",-1.110,-8.671,ok
+Basse Fingered,Fingered Round Warm,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass,warm",-1.110,-7.782,ok
+Basse Fingered,Disco Groove,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-13.320,ok
+Basse Fingered,Ballad Intime,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-8.678,ok
+Basse Fingered,Punk Drive,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass,driven",-1.110,-9.050,ok
+Basse Fingered,Latin Groove,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-12.953,ok
+Basse Fingered,Fingered Sub Heavy,acoustic,sub-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-8.682,ok
+Basse Fingered,Prog Technique,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-12.939,ok
+Basse Fingered,Metal Agressif,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-9.040,ok
+Basse Fingered,Mute Doux,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-16.073,ok
+Basse Fingered,Fingered Sustain Long,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-8.189,ok
+Basse Fingered,Compétition Slick,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-13.157,ok
+Basse Fingered,Dub Profond,acoustic,organic-foundation,"bass,factory,acoustic,fingered-bass",-1.110,-7.588,ok
+Basse Slap,Slap Classique,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-8.721,ok
+Basse Slap,Funk Attack,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-8.954,ok
+Basse Slap,Slap Groovy,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.999,ok
+Basse Slap,Double Thumb,acoustic,organic-foundation,"bass,factory,acoustic,slap-bass",-1.110,-8.888,ok
+Basse Slap,Slap Profond,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.408,ok
+Basse Slap,Pop Slap,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-8.484,ok
+Basse Slap,Slap Marcus,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-9.270,ok
+Basse Slap,Thumb Heavy,acoustic,organic-foundation,"bass,factory,acoustic,slap-bass",-1.110,-7.987,ok
+Basse Slap,Slap Bright Pop,acoustic,transient-bass,"bass,factory,acoustic,slap-bass,bright",-1.110,-8.844,ok
+Basse Slap,Slap R&B,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.969,ok
+Basse Slap,Wooten Fury,acoustic,organic-foundation,"bass,factory,acoustic,slap-bass",-1.110,-9.969,ok
+Basse Slap,Slap Lo-Fi,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-11.880,ok
+Basse Slap,Slap Ghost Notes,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-10.347,ok
+Basse Slap,Festival Punchy,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-9.312,ok
+Basse Slap,Slap Vintage 70s,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.673,ok
+Basse Slap,Slap Compétition,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-9.002,ok
+Basse Slap,Slap Jazz,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-13.216,ok
+Basse Slap,Slap Électrique,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-8.703,ok
+Basse Slap,Slap Sub Lourd,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.145,ok
+Basse Slap,Slap Staccato,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-11.512,ok
+Basse Slap,Slap Chorus,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.910,ok
+Basse Slap,Slap Drive Sale,acoustic,transient-bass,"bass,factory,acoustic,slap-bass,driven",-1.110,-8.646,ok
+Basse Slap,Slap Sustain Chaud,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-12.285,ok
+Basse Slap,Slap Harmonique,acoustic,transient-bass,"bass,factory,acoustic,slap-bass",-1.110,-8.882,ok
+Sub 808,Sub Pur,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.268,ok
+Sub 808,Trap Minimal,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.594,ok
+Sub 808,Sub Long,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-13.558,ok
+Sub 808,Drill Drop,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-9.435,ok
+Sub 808,Club Sub,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.602,ok
+Sub 808,808 Lourd,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.271,ok
+Sub 808,Trap Court,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-9.624,ok
+Sub 808,Sub Glissé,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.045,ok
+Sub 808,UK Garage Sub,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-14.072,ok
+Sub 808,Lo-Fi 808,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-11.466,ok
+Sub 808,Phonk Sub,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-8.441,ok
+Sub 808,Ambient Sub,808,texture-bass,"bass,factory,808,sub-808",-1.110,-10.545,ok
+Sub 808,Sub Staccato,808,transient-bass,"bass,factory,808,sub-808",-1.110,-10.605,ok
+Sub 808,Reggaeton Sub,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.671,ok
+Sub 808,Sub Vibrant,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-13.654,ok
+Sub 808,Ultra Low,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-13.604,ok
+Sub 808,Bounce 808,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-8.869,ok
+Sub 808,Jersey Club,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-15.902,ok
+Sub 808,Sub Mono Glide,808,sub-foundation,"bass,factory,808,sub-808,glide",-1.110,-15.234,ok
+Sub 808,Sub Distortion Légère,808,sub-foundation,"bass,factory,808,sub-808,driven",-1.110,-12.877,ok
+Sub 808,Grime Sub,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-13.506,ok
+Sub 808,Sub Pad Atmosphère,808,texture-bass,"bass,factory,808,sub-808",-1.110,-8.078,ok
+Sub 808,808 Punch,808,transient-bass,"bass,factory,808,sub-808",-1.110,-9.485,ok
+Sub 808,Sub Réverbéré,808,sub-foundation,"bass,factory,808,sub-808",-1.110,-7.736,ok
+Boom 808,Boom Standard,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-11.819,ok
+Boom 808,Trap Boom,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.067,ok
+Boom 808,Heavy Hip-Hop,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-10.652,ok
+Boom 808,808 Saturé,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.063,ok
+Boom 808,808 Mélodique,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-11.366,ok
+Boom 808,Boom Deep,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-10.658,ok
+Boom 808,Boom Clap,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-8.147,ok
+Boom 808,Boom Smooth,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-9.544,ok
+Boom 808,Boom Punch,808,transient-bass,"bass,factory,808,boom-808",-1.110,-7.951,ok
+Boom 808,Boom R&B,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-10.923,ok
+Boom 808,Boom Reggaeton,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.197,ok
+Boom 808,Boom Lo-Fi,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-9.833,ok
+Boom 808,Boom Phonk,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-8.110,ok
+Boom 808,Boom Layered,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-11.744,ok
+Boom 808,Boom Dark,808,sub-foundation,"bass,factory,808,boom-808,dark",-1.110,-10.669,ok
+Boom 808,Boom BassHead,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-7.613,ok
+Boom 808,Boom Sustain,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-10.576,ok
+Boom 808,Boom ATL,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.062,ok
+Boom 808,Boom Glide,808,sub-foundation,"bass,factory,808,boom-808,glide",-1.110,-11.818,ok
+Boom 808,Boom Speaker Blow,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-7.927,ok
+Boom 808,Boom Festival,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.079,ok
+Boom 808,Boom Film Score,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-9.505,ok
+Boom 808,Boom Vinyl Crunch,808,sub-foundation,"bass,factory,808,boom-808,driven",-1.110,-10.997,ok
+Boom 808,Boom Mono Funk,808,sub-foundation,"bass,factory,808,boom-808",-1.110,-12.205,ok
+Distorted 808,Rage 808,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.309,ok
+Distorted 808,Trap Gritty,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-7.030,ok
+Distorted 808,Grunge Sub,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-11.666,ok
+Distorted 808,808 Clippé,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.297,ok
+Distorted 808,Acide Saturé,808,sub-foundation,"bass,factory,808,distorted-808,acid",-1.110,-7.736,ok
+Distorted 808,Distort Lourd,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-7.164,ok
+Distorted 808,Trash 808,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.569,ok
+Distorted 808,808 Buzz Saw,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.800,ok
+Distorted 808,Distort Warm,808,sub-foundation,"bass,factory,808,distorted-808,driven,warm",-1.110,-11.181,ok
+Distorted 808,808 Crunch,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-7.309,ok
+Distorted 808,Industrial 808,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.651,ok
+Distorted 808,808 Scream,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-8.133,ok
+Distorted 808,Distort Short,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-8.463,ok
+Distorted 808,Phonk Rage,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.515,ok
+Distorted 808,Distort Mélodie,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-10.998,ok
+Distorted 808,808 Fuzz,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.573,ok
+Distorted 808,Distort Glide,808,sub-foundation,"bass,factory,808,distorted-808,glide,driven",-1.110,-7.017,ok
+Distorted 808,808 RMS Max,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-8.076,ok
+Distorted 808,Distort Ambient,808,texture-bass,"bass,factory,808,distorted-808,driven",-1.110,-9.930,ok
+Distorted 808,808 Broken Speaker,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-7.762,ok
+Distorted 808,Distort Bounce,808,sub-foundation,"bass,factory,808,distorted-808,driven",-1.110,-7.340,ok
+Distorted 808,808 Tape Sat,808,sub-foundation,"bass,factory,808,distorted-808",-1.110,-11.176,ok
+Moog Bass,Warm Classic,synth,character-bass,"bass,factory,synth,moog-bass,warm",-1.110,-14.257,ok
+Moog Bass,Moog Funk,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.535,ok
+Moog Bass,Lead Bass,synth,lead-bass,"bass,factory,synth,moog-bass",-1.110,-13.858,ok
+Moog Bass,Rétro 70s,synth,character-bass,"bass,factory,synth,moog-bass",-1.110,-10.382,ok
+Moog Bass,Moog Deep,synth,sub-foundation,"bass,factory,synth,moog-bass,moog",-1.110,-11.664,ok
+Moog Bass,Moog Disco,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.410,ok
+Moog Bass,Moog Sub Drone,synth,sub-foundation,"bass,factory,synth,moog-bass,moog",-1.110,-7.531,ok
+Moog Bass,Moog Grind,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-9.979,ok
+Moog Bass,Moog Pad,synth,texture-bass,"bass,factory,synth,moog-bass,moog",-1.110,-9.914,ok
+Moog Bass,Moog Stab,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-12.701,ok
+Moog Bass,Moog Wah,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.676,ok
+Moog Bass,Moog Solo Scream,synth,lead-bass,"bass,factory,synth,moog-bass,moog",-1.110,-9.601,ok
+Moog Bass,Moog 80s Pop,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.289,ok
+Moog Bass,Moog Prog,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.083,ok
+Moog Bass,Moog Dark Ambient,synth,texture-bass,"bass,factory,synth,moog-bass,dark,moog",-1.110,-9.854,ok
+Moog Bass,Moog Octave Split,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.692,ok
+Moog Bass,Moog Reggae,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-8.298,ok
+Moog Bass,Moog Acid Trip,synth,character-bass,"bass,factory,synth,moog-bass,acid,moog",-1.110,-10.773,ok
+Moog Bass,Moog Filter Sweep,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.141,ok
+Moog Bass,Moog Percussif,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-11.723,ok
+Moog Bass,Moog Glide Legato,synth,character-bass,"bass,factory,synth,moog-bass,glide,moog",-1.110,-14.369,ok
+Moog Bass,Moog EQ Boost,synth,character-bass,"bass,factory,synth,moog-bass,moog",-1.110,-14.062,ok
+Reese Bass,Reese DnB,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-12.967,ok
+Reese Bass,Reese Sombre,synth,character-bass,"bass,factory,synth,reese-bass,dark,reese",-1.110,-9.618,ok
+Reese Bass,Neurofunk,synth,character-bass,"bass,factory,synth,reese-bass",-1.110,-12.504,ok
+Reese Bass,Reese Large,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-10.917,ok
+Reese Bass,Reese Ambient,synth,texture-bass,"bass,factory,synth,reese-bass,reese",-1.110,-13.227,ok
+Reese Bass,Reese Jungle,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-11.451,ok
+Reese Bass,Reese Dubstep,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-12.676,ok
+Reese Bass,Reese Liquid,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-11.690,ok
+Reese Bass,Reese Minimal,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-11.397,ok
+Reese Bass,Reese Menace,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-12.634,ok
+Reese Bass,Reese Sub Deep,synth,sub-foundation,"bass,factory,synth,reese-bass,reese",-1.110,-9.690,ok
+Reese Bass,Reese Techno,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-12.415,ok
+Reese Bass,Reese Filthy,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-12.533,ok
+Reese Bass,Reese Slow Evolve,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-7.803,ok
+Reese Bass,Reese Aggro,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-13.836,ok
+Reese Bass,Reese Pad Lush,synth,texture-bass,"bass,factory,synth,reese-bass,reese",-1.110,-10.299,ok
+Reese Bass,Reese Roller,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-10.856,ok
+Reese Bass,Reese Dark Matter,synth,character-bass,"bass,factory,synth,reese-bass,dark,reese",-1.110,-12.735,ok
+Reese Bass,Reese Cinematic,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-9.543,ok
+Reese Bass,Reese Glide Smooth,synth,character-bass,"bass,factory,synth,reese-bass,glide,reese",-1.110,-12.130,ok
+Reese Bass,Reese Laser,synth,character-bass,"bass,factory,synth,reese-bass,reese",-1.110,-14.245,ok
+Reese Bass,Reese Sub Growl,synth,sub-foundation,"bass,factory,synth,reese-bass,reese",-1.110,-12.597,ok
+Acid Bass,Acid 303,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.110,ok
+Acid Bass,Acid Rapide,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-9.601,ok
+Acid Bass,Acid Hardcore,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.552,ok
+Acid Bass,Acid Mélodique,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.304,ok
+Acid Bass,Techno Acid,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.819,ok
+Acid Bass,Acid Deep,synth,sub-foundation,"bass,factory,synth,acid-bass,acid",-1.110,-11.512,ok
+Acid Bass,Acid Squelch,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-9.032,ok
+Acid Bass,Acid Groove,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.005,ok
+Acid Bass,Acid House,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.746,ok
+Acid Bass,Acid Dark,synth,character-bass,"bass,factory,synth,acid-bass,dark,acid",-1.110,-11.461,ok
+Acid Bass,Acid Rave,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-9.552,ok
+Acid Bass,Acid Warm,synth,character-bass,"bass,factory,synth,acid-bass,warm,acid",-1.110,-11.200,ok
+Acid Bass,Acid Staccato,synth,transient-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.942,ok
+Acid Bass,Acid Screech,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-9.132,ok
+Acid Bass,Acid Glide Lent,synth,character-bass,"bass,factory,synth,acid-bass,glide,acid",-1.110,-11.266,ok
+Acid Bass,Acid Minimal,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.417,ok
+Acid Bass,Acid Drive Lourd,synth,character-bass,"bass,factory,synth,acid-bass,driven,acid",-1.110,-8.612,ok
+Acid Bass,Acid Rétro,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.671,ok
+Acid Bass,Acid EBM,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.092,ok
+Acid Bass,Acid Filter Env,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-8.272,ok
+Acid Bass,Acid Sustain,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.054,ok
+Acid Bass,Acid Lo-Fi Tape,synth,character-bass,"bass,factory,synth,acid-bass,acid",-1.110,-11.311,ok

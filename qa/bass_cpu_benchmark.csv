@@ -1,0 +1,19 @@
+Instrument,Preset,Voices,RenderSeconds,ElapsedMs,RealtimeFactor,MsPerVoiceSecond
+Contrebasse,Warm Pad Bass,8,1.500,40.737,36.822,3.394742
+Boom 808,Boom Film Score,8,1.500,36.232,41.400,3.019317
+Distorted 808,Distort Ambient,8,1.500,23.153,64.788,1.929383
+Reese Bass,Reese Pad Lush,8,1.500,24.859,60.339,2.071617
+Acid Bass,Acid Sustain,8,1.500,25.425,58.998,2.118717
+ALL,summary,8,1.500,0.000,0.000,2.506755
+Contrebasse,Warm Pad Bass,16,1.500,79.575,18.850,3.315638
+Boom 808,Boom Film Score,16,1.500,71.331,21.029,2.972137
+Distorted 808,Distort Ambient,16,1.500,44.348,33.823,1.847829
+Reese Bass,Reese Pad Lush,16,1.500,47.698,31.448,1.987400
+Acid Bass,Acid Sustain,16,1.500,49.242,30.462,2.051733
+ALL,summary,16,1.500,0.000,0.000,2.434948
+Contrebasse,Warm Pad Bass,32,1.500,156.484,9.586,3.260075
+Boom 808,Boom Film Score,32,1.500,141.882,10.572,2.955885
+Distorted 808,Distort Ambient,32,1.500,87.743,17.095,1.827969
+Reese Bass,Reese Pad Lush,32,1.500,95.935,15.636,1.998650
+Acid Bass,Acid Sustain,32,1.500,98.611,15.211,2.054385
+ALL,summary,32,1.500,0.000,0.000,2.419393
