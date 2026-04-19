@@ -75,10 +75,26 @@ if ($LASTEXITCODE -ne 0) {
     throw "CMake configuration failed."
 }
 
+$standaloneTarget = "${pluginTarget}_Standalone"
+$standaloneProjectFile = Join-Path $buildPath "$standaloneTarget.vcxproj"
+if (Test-Path $standaloneProjectFile) {
+    $targets = @($pluginTarget, $standaloneTarget) + $consoleTargets | Select-Object -Unique
+}
+
 foreach ($target in $targets) {
     & cmake --build $buildPath --config $Configuration --target $target
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed for target '$target'."
+    }
+}
+
+if ($targets -contains $standaloneTarget) {
+    $standaloneDir = Join-Path $buildPath "${pluginTarget}_artefacts\$Configuration\Standalone"
+    $standaloneExe = Get-ChildItem $standaloneDir -File -Filter *.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+
+    if (-not $standaloneExe) {
+        throw "Standalone build target '$standaloneTarget' completed but no standalone executable was found."
     }
 }
 
