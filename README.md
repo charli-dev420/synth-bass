@@ -1,16 +1,36 @@
-﻿# synth-bass
+# synth-bass
 
-Snapshot split repository generated from global workspace.
+Individually reproducible split repository generated from the main `musique/synth` workspace.
 
-## Included folders/files
-System.Object[]
+## Layout
+- the single top-level project directory contains the JUCE/CMake project
+- `Shared/` contains the shared runtime code copied from the main workspace
+- `new composants/` contains the shared UI component snapshot used by the export
+- `qa/` contains the exported QA baselines and release checklists
+- `assets versions png/` contains the minimal asset subset required by this repo
 
-## Shared components
-This snapshot includes shared components by copying Shared/ and 
-ew composants/ when present.
+## Build
+From the repository root:
 
-## Reproducibility notes
-See REPRODUCIBILITY.md for snapshot date and provenance paths.
+```powershell
+.\_build_all.ps1 -Configuration Release
+```
 
-## Build hint
-Run available top-level build scripts such as _build_all.ps1 or uild_all.ps1 as needed.
+Use an existing JUCE checkout explicitly:
+
+```powershell
+.\_build_all.ps1 -Configuration Release -JuceDir D:\Dev\JUCE
+```
+
+Bootstrap JUCE locally inside the repo when needed:
+
+```powershell
+.\_build_all.ps1 -Configuration Release -BootstrapJuce
+```
+
+Add `-RunTests` to execute the exported console test target after the build.
+
+## Notes
+- JUCE is intentionally not committed in this export; `_build_all.ps1` can use an existing checkout or clone `8.0.4` into `JUCE/`.
+- The repo carries the asset files referenced by its exported `CMakeLists.txt`, so no sibling monorepo folders are required.
+- See `REPRODUCIBILITY.md` for the snapshot assumptions and provenance.

@@ -1,0 +1,8 @@
+build/
+build-*/
+build_standalone_local/
+.vs/
+JUCE/
+CMakeUserPresets.json
+*.vcxproj.user
+*.suo
