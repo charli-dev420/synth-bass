@@ -9,9 +9,14 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(MBS_ENABLE_VST2 "Enable legacy VST2 format (requires legacy JUCE + VST2 SDK)" OFF)
 
 # ---------------------------------------------------------------------------
-# JUCE: use local copy if present, otherwise fetch from GitHub
+# JUCE: use an explicit checkout when provided, otherwise fall back to a
+# repository-local copy or FetchContent.
 # ---------------------------------------------------------------------------
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
+set(UWDEVST_JUCE_DIR "" CACHE PATH "Optional path to a JUCE checkout to use instead of FetchContent")
+
+if (UWDEVST_JUCE_DIR AND EXISTS "${UWDEVST_JUCE_DIR}/CMakeLists.txt")
+    add_subdirectory("${UWDEVST_JUCE_DIR}" JUCE)
+elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
     add_subdirectory(JUCE)
 else()
     include(FetchContent)
@@ -29,7 +34,12 @@ if (MBS_ENABLE_VST2)
     list(APPEND MBS_PLUGIN_FORMATS VST)
 endif()
 
-set(UWDEVST_SHARED_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png" CACHE PATH "Path to the shared UI/assets directory")
+set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
+if (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
+    set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
+endif()
+
+set(UWDEVST_SHARED_ASSETS_DIR "${_uwdevst_default_assets_dir}" CACHE PATH "Path to the shared UI/assets directory")
 if (IS_ABSOLUTE "${UWDEVST_SHARED_ASSETS_DIR}")
     set(ASSETS_DIR "${UWDEVST_SHARED_ASSETS_DIR}")
 else()
