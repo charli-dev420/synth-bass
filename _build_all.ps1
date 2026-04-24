@@ -10,10 +10,15 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSCommandPath
-$projectDir = Get-ChildItem -LiteralPath $repoRoot -Directory |
-    Where-Object { Test-Path (Join-Path $_.FullName "CMakeLists.txt") } |
-    Sort-Object Name |
-    Select-Object -First 1
+$projectDir = $null
+if (Test-Path (Join-Path $repoRoot "CMakeLists.txt")) {
+    $projectDir = Get-Item -LiteralPath $repoRoot
+} else {
+    $projectDir = Get-ChildItem -LiteralPath $repoRoot -Directory |
+        Where-Object { Test-Path (Join-Path $_.FullName "CMakeLists.txt") } |
+        Sort-Object Name |
+        Select-Object -First 1
+}
 
 if (-not $projectDir) {
     throw "No top-level project directory with CMakeLists.txt was found under $repoRoot."
@@ -60,9 +65,29 @@ if ($BootstrapJuce -and -not $resolvedJuceDir) {
 }
 
 $buildPath = Join-Path $repoRoot $BuildDir
+$cmakeCache = Join-Path $buildPath "CMakeCache.txt"
+if (Test-Path $cmakeCache) {
+    $cachedSource = Select-String -Path $cmakeCache -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=' | Select-Object -First 1
+    if ($cachedSource) {
+        $cachedSourcePath = $cachedSource.Line.Substring("CMAKE_HOME_DIRECTORY:INTERNAL=".Length)
+        $resolvedProjectPath = (Resolve-Path $projectDir.FullName).Path
+        if ($cachedSourcePath -ne $resolvedProjectPath) {
+            Write-Host "Removing stale build directory '$buildPath' because it was configured for '$cachedSourcePath'."
+            try {
+                Remove-Item -LiteralPath $buildPath -Recurse -Force
+            } catch {
+                $fallbackBuildDir = "${BuildDir}_fresh"
+                $buildPath = Join-Path $repoRoot $fallbackBuildDir
+                Write-Warning "Could not remove '$BuildDir'. Falling back to '$fallbackBuildDir'."
+            }
+        }
+    }
+}
+
 $cmakeArgs = @(
     "-S", $projectDir.FullName,
     "-B", $buildPath,
+    "-Wno-dev",
     "-DUWDEVST_SHARED_ASSETS_DIR=$assetsDir"
 )
 

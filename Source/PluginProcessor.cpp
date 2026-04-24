@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "../../Shared/PresetManifest.h"
+#include "../Shared/PresetManifest.h"
 
 #include <algorithm>
 #include <cstdlib>

@@ -8,8 +8,8 @@
 #include "Engine/BassVoice.h"
 #include "Engine/FactoryPresets.h"
 #include "Engine/FxProcessors.h"
-#include "../../Shared/PitchBendState.h"
-#include "../../Shared/ModulationMatrix.h"
+#include "../Shared/PitchBendState.h"
+#include "../Shared/ModulationMatrix.h"
 
 class BassSynthAudioProcessor : public juce::AudioProcessor,
                                 private juce::AsyncUpdater

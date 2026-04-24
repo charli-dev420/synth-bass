@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "PluginProcessor.h"
-#include "../../Shared/SynthCommon.h"
+#include "../Shared/SynthCommon.h"
 
 // =============================================================================
 // Bass Synth editor — inherits CommonSynthEditor from Shared/SynthCommon.h

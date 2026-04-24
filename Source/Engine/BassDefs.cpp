@@ -65,11 +65,13 @@ constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
       0.0f, 0.0f,
       0.0f, true },
     // Boom 808: richer, bigger pitch drop, long sustain
+    // FIX Phase 2.3: Added body delay (0.35) + body damping (0.12) for subtle resonance
+    // This gives Boom 808 a "massif" feel instead of sounding "vide"
     { OscMode::Additive, 5, 0.0001f, 0.0f, 1,
       8.0f, 0.08f,
       0.20f, 6.0f, 0.40f,
       0.0f, 0.0f, 0.0f,
-      0.0f, 0.0f,
+      0.35f, 0.12f,  // bodyDelayRatio=0.35 (5th harmonic), bodyDamping=0.12 (subtle)
       1.5f, true },
     // Distorted 808: saturated, aggressive, big pitch sweep
     { OscMode::Sine, 0, 0.0f, 0.0f, 1,

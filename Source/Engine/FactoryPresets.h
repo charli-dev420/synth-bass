@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BassDefs.h"
-#include "../../../Shared/ModulationMatrix.h"
+#include "../../Shared/ModulationMatrix.h"
 
 #include <array>
 #include <optional>

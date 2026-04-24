@@ -1,8 +1,12 @@
 build/
-build-*/
+build_fresh/
 build_standalone_local/
-.vs/
 JUCE/
-CMakeUserPresets.json
-*.vcxproj.user
+render_output_bass/
+.vs/
+*.VC.db
+*.VC.opendb
 *.suo
+*.user
+*.userosscache
+*.sln.docstates

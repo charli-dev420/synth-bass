@@ -3,8 +3,8 @@
 #include "../PluginEditor.h"
 #include "../PluginProcessor.h"
 #include "../Engine/FactoryPresets.h"
-#include "../../../Shared/PresetManifest.h"
-#include "../../../Shared/ProductionQa.h"
+#include "../../Shared/PresetManifest.h"
+#include "../../Shared/ProductionQa.h"
 
 #include <cmath>
 #include <cstdlib>

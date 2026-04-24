@@ -3,7 +3,7 @@
 #include "../Engine/BassDefs.h"
 #include "../Engine/BassVoice.h"
 #include "../Engine/FactoryPresets.h"
-#include "../../../Shared/ProductionQa.h"
+#include "../../Shared/ProductionQa.h"
 
 #include <algorithm>
 #include <array>

@@ -141,71 +141,75 @@ void BassVoice::noteOn(const BassSettings& s,
     numOscs = 0;
     numActivePartials = 0;
 
-    if (chars.oscMode == OscMode::Additive)
-    {
-        // Additive synthesis (acoustic basses)
-        const int np = std::min(chars.numPartials, kMaxPartials);
-        numActivePartials = np;
-
-        const float brightMult = 0.5f + settings.brightness * 1.5f;
-
-        for (int n = 0; n < np; ++n)
+        if (chars.oscMode == OscMode::Additive)
         {
-            const int harmonic = n + 1;
-            const float fn = static_cast<float>(harmonic) * baseFreq *
-                std::sqrt(1.0f + chars.inharmonicity *
-                          static_cast<float>(harmonic * harmonic));
+            // Additive synthesis (acoustic basses)
+            const int np = std::min(chars.numPartials, kMaxPartials);
+            numActivePartials = np;
 
-            if (fn >= fsr * 0.48f)
+            const float brightMult = 0.5f + settings.brightness * 1.5f;
+
+            for (int n = 0; n < np; ++n)
             {
-                numActivePartials = n;
-                break;
+                const int harmonic = n + 1;
+                const float fn = static_cast<float>(harmonic) * baseFreq *
+                    std::sqrt(1.0f + chars.inharmonicity *
+                              static_cast<float>(harmonic * harmonic));
+
+                if (fn >= fsr * 0.48f)
+                {
+                    numActivePartials = n;
+                    break;
+                }
+
+                // Amplitude: 1/n rolloff, shaped by brightness
+                const float baseAmp = 1.0f / static_cast<float>(harmonic);
+                const float rolloff = 1.0f / (1.0f + (fn / (baseFreq * 4.0f * brightMult))
+                                      * (fn / (baseFreq * 4.0f * brightMult)));
+                const float amp = baseAmp * (0.2f + 0.8f * rolloff);
+
+                // Per-partial decay: higher partials decay faster (power law)
+                const float qHarm = 1.0f + (1.0f - settings.brightness) * 2.0f;
+                const float dScale = 1.0f /
+                    (1.0f + qHarm * std::pow(static_cast<float>(harmonic), 1.5f) * 0.05f);
+                const float dTime = std::max(0.02f,
+                    settings.decaySeconds * chars.decay2Ratio * dScale);
+
+                auto& p = partials[static_cast<std::size_t>(n)];
+                p.phase     = 0.0f;
+                p.phaseInc  = fn / fsr;
+                p.amplitude = amp;
+                p.decayCoeff = std::exp(-1.0f / (dTime * fsr));
             }
-
-            // Amplitude: 1/n rolloff, shaped by brightness
-            const float baseAmp = 1.0f / static_cast<float>(harmonic);
-            const float rolloff = 1.0f / (1.0f + (fn / (baseFreq * 4.0f * brightMult))
-                                  * (fn / (baseFreq * 4.0f * brightMult)));
-            const float amp = baseAmp * (0.2f + 0.8f * rolloff);
-
-            // Per-partial decay: higher partials decay faster (power law)
-            const float qHarm = 1.0f + (1.0f - settings.brightness) * 2.0f;
-            const float dScale = 1.0f /
-                (1.0f + qHarm * std::pow(static_cast<float>(harmonic), 1.5f) * 0.05f);
-            const float dTime = std::max(0.02f,
-                settings.decaySeconds * chars.decay2Ratio * dScale);
-
-            auto& p = partials[static_cast<std::size_t>(n)];
-            p.phase     = 0.0f;
-            p.phaseInc  = fn / fsr;
-            p.amplitude = amp;
-            p.decayCoeff = std::exp(-1.0f / (dTime * fsr));
         }
-    }
-    else
-    {
-        // Oscillator modes (saw/sine/square) with optional unison
-        numOscs = std::clamp(chars.numOscillators, 1, kMaxOsc);
-        const float detuneHz = chars.detuneAmount * baseFreq * computeDetuneBlend();
-
-        for (int o = 0; o < numOscs; ++o)
+        else
         {
-            auto& osc = oscs[static_cast<std::size_t>(o)];
-            osc.phase = (numOscs > 1) ? rng.nextFloat() : 0.0f;
+            // Oscillator modes (saw/sine/square) with optional unison
+            // FIX: Use cents for detune to maintain consistent perception across registers
+            // C1 (65Hz): 1.5 cents = 0.75 Hz (subtle)
+            // C4 (261Hz): 1.5 cents = 3.0 Hz (same perceived width)
+            numOscs = std::clamp(chars.numOscillators, 1, kMaxOsc);
+            const float detuneCents = chars.detuneAmount * 100.0f * computeDetuneBlend();
+            const float detuneRatio = std::pow(2.0f, detuneCents / 1200.0f);
 
-            float freqOffset = 0.0f;
-            if (numOscs == 2)
-                freqOffset = (o == 0 ? -detuneHz : detuneHz) * 0.5f;
-            else if (numOscs == 3)
-                freqOffset = static_cast<float>(o - 1) * detuneHz;
+            for (int o = 0; o < numOscs; ++o)
+            {
+                auto& osc = oscs[static_cast<std::size_t>(o)];
+                osc.phase = (numOscs > 1) ? rng.nextFloat() : 0.0f;
 
-            osc.phaseInc = (baseFreq + freqOffset) / fsr;
+                float freqRatio = 1.0f;
+                if (numOscs == 2)
+                    freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
+                else if (numOscs == 3)
+                    freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
+
+                osc.phaseInc = (baseFreq * freqRatio) / fsr;
+            }
         }
-    }
 
-    // ----- Sub oscillator -----
-    subPhase    = 0.0f;
-    subPhaseInc = (baseFreq * 0.5f) / fsr;
+        // ----- Sub oscillator -----
+        subPhase    = 0.0f;
+        subPhaseInc = (baseFreq * 0.5f) / fsr;
 
     // ----- Pitch envelope -----
     const float pitchSemis = chars.pitchEnvSemitones * settings.pitchEnv;
@@ -254,8 +258,13 @@ void BassVoice::noteOn(const BassSettings& s,
         : (chars.isSubBass ? std::exp2((settings.brightness - 0.5f) * 0.55f) : 1.0f);
     const float voicedCutoff = juce::jlimit(20.0f, fsr * 0.45f, safeFreq * brightnessCutoffMul);
     {
-        // Independent resonance: 0→Q=0.5 (gentle), 1→Q=12 (screaming)
-        const float Q = 0.5f + settings.resonance * 11.5f;
+        // FIX Phase 2.2: Resonance guard — limit Q to prevent filter self-oscillation
+        // 12dB/oct (single): max Q = 10.0 (safe)
+        // 24dB/oct (double): max Q = 8.0 (cascade is more prone to instability)
+        const bool singleStage = !(chars.oscMode == OscMode::Saw || chars.oscMode == OscMode::Square);
+        const float maxQ = singleStage ? 10.0f : 8.0f;
+        const float clampedResonance = std::min(settings.resonance, 1.0f);
+        const float Q = 0.5f + clampedResonance * (maxQ - 0.5f);
         filterQinv = 1.0f / Q;
     }
     const float rawF = 2.0f * std::sin(juce::MathConstants<float>::pi * voicedCutoff / fsr);
@@ -378,7 +387,15 @@ void BassVoice::glideToNote(int note, float glideTimeSec)
         const float glideTimeSamples = glideTimeSec * static_cast<float>(sr);
         // Exponential glide: ratio per sample to reach target
         const float ratio = targetFreq / std::max(0.01f, baseFreq);
-        glideCoeff = std::pow(ratio, 1.0f / std::max(1.0f, glideTimeSamples));
+        
+        // FIX Phase 2.1: Glide guard — limit glide ratio to prevent "slap" effect
+        // Large intervals with short glide times can create harsh portamento
+        // Limit ratio to max 2.0 (one octave) and ensure minimum glide time of 50ms
+        const float maxGlideRatio = 2.0f;  // Max one octave compression
+        const float safeGlideTimeSec = std::max(glideTimeSec, 0.05f);  // Min 50ms
+        const float safeRatio = std::min(ratio, maxGlideRatio);
+        const float safeGlideTimeSamples = safeGlideTimeSec * static_cast<float>(sr);
+        glideCoeff = std::pow(safeRatio, 1.0f / std::max(1.0f, safeGlideTimeSamples));
         glideActive = true;
     }
     else
@@ -421,7 +438,12 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
         baseFreq = oldBaseFreq;
         const float glideTimeSamples = settings.glideTime * fsr;
         const float ratio = targetFreq / std::max(0.01f, baseFreq);
-        glideCoeff = std::pow(ratio, 1.0f / std::max(1.0f, glideTimeSamples));
+        // FIX Phase 2.1: Same glide guard as glideToNote()
+        const float maxGlideRatio = 2.0f;
+        const float safeGlideTimeSec = std::max(settings.glideTime, 0.05f);
+        const float safeRatio = std::min(ratio, maxGlideRatio);
+        const float safeGlideTimeSamples = safeGlideTimeSec * fsr;
+        glideCoeff = std::pow(safeRatio, 1.0f / std::max(1.0f, safeGlideTimeSamples));
         glideActive = true;
     }
     else
@@ -447,15 +469,17 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
     // Update oscillator phase increments
     if (chars.oscMode != OscMode::Additive)
     {
-        const float detuneHz = chars.detuneAmount * baseFreq * computeDetuneBlend();
+        // FIX: Use same cents-based detune as noteOn for consistency
+        const float detuneCents = chars.detuneAmount * 100.0f * computeDetuneBlend();
+        const float detuneRatio = std::pow(2.0f, detuneCents / 1200.0f);
         for (int o = 0; o < numOscs; ++o)
         {
-            float freqOffset = 0.0f;
+            float freqRatio = 1.0f;
             if (numOscs == 2)
-                freqOffset = (o == 0 ? -detuneHz : detuneHz) * 0.5f;
+                freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
             else if (numOscs == 3)
-                freqOffset = static_cast<float>(o - 1) * detuneHz;
-            oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq + freqOffset) / fsr;
+                freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
+            oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq * freqRatio) / fsr;
         }
     }
     subPhaseInc = (baseFreq * 0.5f) / fsr;
@@ -511,15 +535,17 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
             const auto fsr = static_cast<float>(sr);
             if (chars.oscMode != OscMode::Additive)
             {
-                const float detuneHz = chars.detuneAmount * baseFreq * computeDetuneBlend();
+                // FIX: Use same cents-based detune as noteOn for consistency
+                const float detuneCents = chars.detuneAmount * 100.0f * computeDetuneBlend();
+                const float detuneRatio = std::pow(2.0f, detuneCents / 1200.0f);
                 for (int o = 0; o < numOscs; ++o)
                 {
-                    float freqOffset = 0.0f;
+                    float freqRatio = 1.0f;
                     if (numOscs == 2)
-                        freqOffset = (o == 0 ? -detuneHz : detuneHz) * 0.5f;
+                        freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
                     else if (numOscs == 3)
-                        freqOffset = static_cast<float>(o - 1) * detuneHz;
-                    oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq + freqOffset) / fsr;
+                        freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
+                    oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq * freqRatio) / fsr;
                 }
             }
             else
@@ -653,11 +679,14 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
 
                 case OscMode::Square:
                 {
+                    // FIX: PolyBLEP at both discontinuities of square wave
+                    // First discontinuity at phase=0: subtract blep
+                    // Second discontinuity at phase=0.5: add blep (because square jumps from -1 to +1)
                     float sq = (osc.phase < 0.5f) ? 1.0f : -1.0f;
-                    sq += polyBlep(osc.phase, inc);
+                    sq -= polyBlep(osc.phase, inc);
                     float shifted = osc.phase + 0.5f;
                     if (shifted >= 1.0f) shifted -= 1.0f;
-                    sq -= polyBlep(shifted, inc);
+                    sq += polyBlep(shifted, inc);
                     signal += sq;
                     break;
                 }
@@ -676,9 +705,13 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
         }
 
         // ---- Sub oscillator ----
+        // FIX: Reduce sub level by 25% to minimize beating with fundamental
+        // The octave sub (0.5x) can create audible interference with the fundamental
+        // especially on low notes. This reduces the constructive/destructive phase interaction.
         if (settings.subLevel > 0.001f)
         {
-            const float sub = std::sin(subPhase * twoPi) * settings.subLevel;
+            constexpr float subLevelCorrection = 0.75f;  // -25% to reduce beating
+            const float sub = std::sin(subPhase * twoPi) * settings.subLevel * subLevelCorrection;
             signal += sub;
             subPhase += subPhaseInc * pitchMult;
             if (subPhase >= 1.0f) subPhase -= 1.0f;

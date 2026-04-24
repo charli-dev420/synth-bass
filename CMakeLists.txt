@@ -34,8 +34,12 @@ if (MBS_ENABLE_VST2)
     list(APPEND MBS_PLUGIN_FORMATS VST)
 endif()
 
-set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
-if (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
+set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets versions png")
+if (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets_versions_png")
+    set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets_versions_png")
+elseif (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
+    set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
+elseif (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
     set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
 endif()
 
@@ -76,8 +80,8 @@ target_sources(UWdeVST_bass PRIVATE
     Source/Engine/BassVoice.h
     Source/Engine/FactoryPresets.cpp
     Source/Engine/FactoryPresets.h
-    "${CMAKE_CURRENT_SOURCE_DIR}/../Shared/SynthCommon.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../Shared/SynthCommon.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.h"
 )
 
 target_compile_definitions(UWdeVST_bass PRIVATE
@@ -164,8 +168,8 @@ target_sources(UWdeVST_bass_tests PRIVATE
     Source/Engine/BassVoice.h
     Source/Engine/FactoryPresets.cpp
     Source/Engine/FactoryPresets.h
-    "${CMAKE_CURRENT_SOURCE_DIR}/../Shared/SynthCommon.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../Shared/SynthCommon.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.h"
 )
 
 target_compile_definitions(UWdeVST_bass_tests PRIVATE
