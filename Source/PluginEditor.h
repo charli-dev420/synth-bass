@@ -233,9 +233,12 @@ private:
     // ── Performance controls ───────────────────────────────────────────
     juce::Label    velocityCurveLabel;
     juce::ComboBox velocityCurveSelector;
+    juce::Label    modWheelTargetLabel;
+    juce::ComboBox modWheelTargetSelector;
     juce::Label    pitchBendRangeLabel;
     juce::Slider   pitchBendRangeDial;
     std::unique_ptr<ComboBoxAttach> velocityCurveAtt;
+    std::unique_ptr<ComboBoxAttach> modWheelTargetAtt;
     std::unique_ptr<SliderAttach>   pitchBendRangeAtt;
     juce::TextButton randButton;
     juce::Label      voiceCountLabel;

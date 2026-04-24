@@ -101,7 +101,7 @@ Ce document decrit l'etat reel des controles exposes par le synth bass, leurs ID
 | Wave | `lfo_wave` | Sine, Triangle, Saw ou Square. |
 | Rate | `lfo_rate` | Vitesse du LFO principal. |
 | Depth | `lfo_depth` | Profondeur du LFO principal. |
-| Mod Wheel Target | `mod_wheel_target` | `Off` ou `Punch`. Quand actif, le CC1 agit sur `macro_punch`. |
+| Mod Wheel Target | `mod_wheel_target` | `Off`, `Punch` ou `Cutoff`. Quand actif, le CC1 agit soit sur `macro_punch`, soit sur le cutoff du bass actif. |
 
 ## Panneau 3: MOD MATRIX
 

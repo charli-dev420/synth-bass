@@ -10,7 +10,8 @@ namespace mbs
 void BassVoice::updateEnvelopeCoefficients(float sampleRate) noexcept
 {
     const float fsr = std::max(1.0f, sampleRate);
-    const float attackSeconds = std::max(baseAttackSeconds * std::clamp(currentModulation.attackScale, 0.0625f, 16.0f), 0.0001f);
+    // FIX: Minimum attack 1ms to prevent clicks from random oscillator phases
+    const float attackSeconds = std::max(baseAttackSeconds * std::clamp(currentModulation.attackScale, 0.0625f, 16.0f), 0.001f);
     const float decaySeconds = std::max(baseDecaySeconds * std::clamp(currentModulation.decayScale, 0.0625f, 16.0f), 0.01f);
 
     if (attackSeconds > 0.0001f)
@@ -122,7 +123,8 @@ void BassVoice::noteOn(const BassSettings& s,
     currentModulation = {};
     modPitchFactor = 1.0f;
     quickReleaseForced = false;
-    baseAttackSeconds = settings.attackSeconds;
+    // FIX: Guard attack to prevent click with random oscillator phases on unison
+    baseAttackSeconds = std::max(settings.attackSeconds, 0.001f);
     baseDecaySeconds = settings.decaySeconds;
     baseReleaseSeconds = settings.releaseSeconds;
     basePan = settings.pan;
@@ -420,7 +422,8 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
     vel = juce::jlimit(0.0f, 1.0f, velocity);
     midiNote = note;
     ageSamples = 0;
-    baseAttackSeconds = settings.attackSeconds;
+    // FIX: Guard attack to prevent click with random oscillator phases on unison
+    baseAttackSeconds = std::max(settings.attackSeconds, 0.001f);
     baseDecaySeconds = settings.decaySeconds;
     baseReleaseSeconds = settings.releaseSeconds;
     basePan = settings.pan;

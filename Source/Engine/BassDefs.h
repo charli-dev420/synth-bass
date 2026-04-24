@@ -96,7 +96,7 @@ struct GlobalFxSettings
     float compRelease   = 120.0f;
     float compMakeup    = 0.0f;
     float compMix       = 1.0f;
-    bool  compressorOn  = true;
+    bool  compressorOn  = false;  // FIX: Off by default — preserve transients, let user decide
     // EQ
     float eqLowFreq   = 80.0f;
     float eqLowGain   = 0.0f;
@@ -110,7 +110,7 @@ struct GlobalFxSettings
     float chorusRate   = 0.8f;
     float chorusDepth  = 0.4f;
     float chorusMix    = 0.0f;
-    bool  chorusOn     = true;
+    bool  chorusOn     = false;  // FIX: Off by default — bass must be mono-safe first
     // Delay
     float delayTime     = 300.0f;
     float delayFeedback = 0.25f;

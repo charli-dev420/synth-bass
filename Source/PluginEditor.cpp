@@ -1332,6 +1332,18 @@ BassSynthAudioProcessorEditor::BassSynthAudioProcessorEditor(
     velocityCurveLabel.setColour(juce::Label::textColourId, synthcol::textDim);
     addAndMakeVisible(velocityCurveLabel);
 
+    modWheelTargetSelector.addItem("Off", 1);
+    modWheelTargetSelector.addItem("Punch", 2);
+    modWheelTargetSelector.addItem("Cutoff", 3);
+    modWheelTargetSelector.setTooltip("Choose what CC1 controls in the performance panel: Off, Punch macro, or the active bass cutoff.");
+    modWheelTargetAtt = std::make_unique<ComboBoxAttach>(proc.getAPVTS(), "mod_wheel_target", modWheelTargetSelector);
+    addAndMakeVisible(modWheelTargetSelector);
+    modWheelTargetLabel.setText("MOD WHEEL", juce::dontSendNotification);
+    modWheelTargetLabel.setJustificationType(juce::Justification::centredLeft);
+    modWheelTargetLabel.setFont(juce::Font(juce::FontOptions{}.withHeight(11.0f)));
+    modWheelTargetLabel.setColour(juce::Label::textColourId, synthcol::textDim);
+    addAndMakeVisible(modWheelTargetLabel);
+
     // H2: Pitch bend range
     pitchBendRangeDial.setSliderStyle(juce::Slider::LinearBar);
     pitchBendRangeDial.setTextBoxStyle(juce::Slider::TextBoxLeft, false, 28, 22);
@@ -1858,6 +1870,8 @@ void BassSynthAudioProcessorEditor::resized()
     // Performance controls: pitch bend + glide always visible, velocity curve only in MACRO section
     velocityCurveLabel.setVisible(activeRightPanelSection == 0);
     velocityCurveSelector.setVisible(activeRightPanelSection == 0);
+    modWheelTargetLabel.setVisible(activeRightPanelSection == 0);
+    modWheelTargetSelector.setVisible(activeRightPanelSection == 0);
     pitchBendRangeLabel.setVisible(true);
     pitchBendRangeDial.setVisible(true);
     glideTimeLabel.setVisible(true);
@@ -1871,16 +1885,18 @@ void BassSynthAudioProcessorEditor::resized()
     {
         const int perfLabelY = macroGuardrailLabel.getBottom() + (layout.compact ? 10 : 12);
         const int perfControlY = perfLabelY + 16;
-        const int perfW = (layout.colW - cPad * 2 - perfGap * 2) / 3;
+        const int perfW = (layout.colW - cPad * 2 - perfGap * 3) / 4;
         velocityCurveLabel.setBounds(layout.col3X + cPad, perfLabelY, perfW, 14);
         velocityCurveSelector.setBounds(layout.col3X + cPad, perfControlY, perfW, perfControlH);
         pitchBendRangeLabel.setBounds(velocityCurveSelector.getRight() + perfGap, perfLabelY, perfW, 14);
         pitchBendRangeDial.setBounds(velocityCurveSelector.getRight() + perfGap, perfControlY, perfW, perfControlH);
         glideTimeLabel.setBounds(pitchBendRangeDial.getRight() + perfGap, perfLabelY, perfW, 14);
         glideTimeDial.setBounds(pitchBendRangeDial.getRight() + perfGap, perfControlY, perfW, perfControlH);
+        modWheelTargetLabel.setBounds(glideTimeDial.getRight() + perfGap, perfLabelY, perfW, 14);
+        modWheelTargetSelector.setBounds(glideTimeDial.getRight() + perfGap, perfControlY, perfW, perfControlH);
 
         const int modGapY = interpolateGap(gapDensity, 10, 12, 14);
-        const int modY = juce::jmax(glideTimeDial.getBottom(), velocityCurveSelector.getBottom()) + modGapY;
+        const int modY = juce::jmax(glideTimeDial.getBottom(), modWheelTargetSelector.getBottom()) + modGapY;
         const int topControlGap = layout.compact ? 8 : 10;
         const int halfW = (layout.colW - cPad * 2 - topControlGap) / 2;
         lfoDestLabel.setVisible(true);
@@ -1917,6 +1933,10 @@ void BassSynthAudioProcessorEditor::resized()
         velocityCurveLabel.setBounds(0, 0, 0, 0);
         velocityCurveSelector.setVisible(false);
         velocityCurveSelector.setBounds(0, 0, 0, 0);
+        modWheelTargetLabel.setVisible(false);
+        modWheelTargetLabel.setBounds(0, 0, 0, 0);
+        modWheelTargetSelector.setVisible(false);
+        modWheelTargetSelector.setBounds(0, 0, 0, 0);
         pitchBendRangeLabel.setBounds(layout.col3X + cPad, perfLabelY, perfW, 14);
         pitchBendRangeDial.setBounds(layout.col3X + cPad, perfControlY, perfW, perfControlH);
         glideTimeLabel.setBounds(pitchBendRangeDial.getRight() + perfGap, perfLabelY, perfW, 14);
@@ -2392,6 +2412,8 @@ void BassSynthAudioProcessorEditor::applyBassTheme(int bassIndex)
     monoModeSelector.setColour(juce::ComboBox::outlineColourId, accent.withAlpha(0.30f));
     velocityCurveSelector.setColour(juce::ComboBox::backgroundColourId, panelBg);
     velocityCurveSelector.setColour(juce::ComboBox::outlineColourId, accent.withAlpha(0.30f));
+    modWheelTargetSelector.setColour(juce::ComboBox::backgroundColourId, panelBg);
+    modWheelTargetSelector.setColour(juce::ComboBox::outlineColourId, accent.withAlpha(0.30f));
     delayNoteDivSelector.setColour(juce::ComboBox::backgroundColourId, panelBg);
     delayNoteDivSelector.setColour(juce::ComboBox::outlineColourId, accent.withAlpha(0.30f));
     for (auto& row : modRows)

@@ -647,7 +647,7 @@ bool readPerformanceAttributes(const juce::XmlElement& xml,
     readFloatAttribute("macro_brillance", performance.macroBrillance, 0.0f, 1.0f);
     readFloatAttribute("macro_punch", performance.macroPunch, 0.0f, 1.0f);
     readFloatAttribute("macro_depth", performance.macroDepth, 0.0f, 1.0f);
-    readIntAttribute("mod_wheel_target", performance.modWheelTarget, 0.0f, 1.0f);
+    readIntAttribute("mod_wheel_target", performance.modWheelTarget, 0.0f, 2.0f);
     readFloatAttribute("pitch_bend_range", performance.pitchBendRange, 1.0f, 24.0f);
 
     if (warningCount != nullptr)
@@ -845,7 +845,7 @@ BassSynthAudioProcessor::createParameterLayout()
     // Mod Wheel Target
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         kModWheelTarget, "Mod Wheel Target",
-        juce::StringArray{ "Off", "Punch" }, 1));
+        juce::StringArray{ "Off", "Punch", "Cutoff" }, 1));
 
     // FX: Compressor
     layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -1766,7 +1766,7 @@ void BassSynthAudioProcessor::setStateInformation(const void* data, int sizeInBy
     setSanitizedStateFloat(kMacroBrillance, 0.5f, 0.0f, 1.0f);
     setSanitizedStateFloat(kMacroPunch, 0.5f, 0.0f, 1.0f);
     setSanitizedStateFloat(kMacroDepth, 0.3f, 0.0f, 1.0f);
-    setSanitizedStateFloat(kModWheelTarget, 1.0f, 0.0f, 1.0f);
+    setSanitizedStateFloat(kModWheelTarget, 1.0f, 0.0f, 2.0f);
     setSanitizedStateFloat(kVelocityCurve, 0.0f, 0.0f, 6.0f);
     setSanitizedStateFloat(kPitchBendRange, 2.0f, 1.0f, 24.0f);
     setSanitizedStateFloat(kModLfo2Rate, 2.0f, 0.05f, 12.0f);
@@ -2530,8 +2530,8 @@ mbs::PatchPerformanceSettings BassSynthAudioProcessor::sanitizePerformanceSettin
     sanitized.macroBrillance = sanitizeParameterValue(kMacroBrillance, sanitized.macroBrillance, 0.5f);
     sanitized.macroPunch = sanitizeParameterValue(kMacroPunch, sanitized.macroPunch, 0.5f);
     sanitized.macroDepth = sanitizeParameterValue(kMacroDepth, sanitized.macroDepth, 0.3f);
-    sanitized.modWheelTarget = static_cast<int>(std::round(sanitizeParameterValue(
-        kModWheelTarget, static_cast<float>(sanitized.modWheelTarget), 1.0f)));
+    sanitized.modWheelTarget = juce::jlimit(0, 2, static_cast<int>(std::round(sanitizeParameterValue(
+        kModWheelTarget, static_cast<float>(sanitized.modWheelTarget), 1.0f))));
     sanitized.pitchBendRange = sanitizeParameterValue(kPitchBendRange, sanitized.pitchBendRange, 2.0f);
     return sanitized;
 }
@@ -2548,7 +2548,7 @@ mbs::PatchPerformanceSettings BassSynthAudioProcessor::snapshotPerformanceSettin
     settings.macroBrillance = readCachedParamValue(globalParamRefs.macroBrillance, settings.macroBrillance);
     settings.macroPunch = readCachedParamValue(globalParamRefs.macroPunch, settings.macroPunch);
     settings.macroDepth = readCachedParamValue(globalParamRefs.macroDepth, settings.macroDepth);
-    settings.modWheelTarget = juce::jlimit(0, 1, static_cast<int>(std::round(readCachedParamValue(globalParamRefs.modWheelTarget, 1.0f))));
+    settings.modWheelTarget = juce::jlimit(0, 2, static_cast<int>(std::round(readCachedParamValue(globalParamRefs.modWheelTarget, 1.0f))));
     settings.pitchBendRange = readCachedParamValue(globalParamRefs.pitchBendRange, settings.pitchBendRange);
     return sanitizePerformanceSettings(settings);
 }
@@ -2948,17 +2948,28 @@ void BassSynthAudioProcessor::handleMidiCC(int ccNumber, int ccValue, int bassIn
         return nullptr;
     };
 
-    // --- Mod wheel: controls punch macro (if target enabled) ---
+    // --- Mod wheel: routes to the selected destination when enabled ---
     if (ccNumber == 1)
     {
-        // Only map to macro if mod_wheel_target != Off (index 0)
         const float targetVal = globalParamRefs.modWheelTarget.raw
             ? globalParamRefs.modWheelTarget.raw->load(std::memory_order_relaxed)
             : 1.0f;
-        if (targetVal >= 0.5f)
+
+        const int targetIndex = juce::jlimit(0, 2, static_cast<int>(std::round(targetVal)));
+        const float normalizedCc = static_cast<float>(ccValue) / 127.0f;
+
+        if (targetIndex == 1)
         {
             if (auto* param = globalParamRefs.macroPunch.ranged)
-                queueParamUpdate(param, static_cast<float>(ccValue) / 127.0f);
+                queueParamUpdate(param, normalizedCc);
+        }
+        else if (targetIndex == 2)
+        {
+            if (auto* param = resolveBassParameter("cutoff"))
+            {
+                const float cutoffHz = juce::jmap(normalizedCc, 120.0f, 12000.0f);
+                queueParamUpdate(param, param->convertTo0to1(cutoffHz));
+            }
         }
         return;
     }
@@ -3007,6 +3018,9 @@ void BassSynthAudioProcessor::handleMidiCC(int ccNumber, int ccValue, int bassIn
 // =============================================================================
 void BassSynthAudioProcessor::queueParamUpdate(juce::RangedAudioParameter* param, float normalisedValue)
 {
+    if (param != nullptr)
+        param->setValue(normalisedValue);
+
     int start1, size1, start2, size2;
     pendingParamFifo.prepareToWrite(1, start1, size1, start2, size2);
     if (size1 > 0)

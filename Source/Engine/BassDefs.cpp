@@ -74,8 +74,10 @@ constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
       0.35f, 0.12f,  // bodyDelayRatio=0.35 (5th harmonic), bodyDamping=0.12 (subtle)
       1.5f, true },
     // Distorted 808: saturated, aggressive, big pitch sweep
+    // FIX: Reduced pitchEnvSemitones from 18.0 to 10.0 to prevent zipper/glitch
+    // during sweep while keeping aggressive character. 10 st in 40ms = ~250 Hz/s.
     { OscMode::Sine, 0, 0.0f, 0.0f, 1,
-      18.0f, 0.04f,
+      10.0f, 0.04f,
       0.35f, 3.0f, 0.25f,
       0.0f, 0.0f, 0.0f,
       0.0f, 0.0f,

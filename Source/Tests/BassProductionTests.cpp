@@ -539,7 +539,7 @@ void testUserPresetRoundTripWithManifest()
     setParameterValue(processor->getAPVTS(), "lfo_wave", 3.0f);
     setParameterValue(processor->getAPVTS(), "lfo_dest", 2.0f);
     setParameterValue(processor->getAPVTS(), "macro_punch", 0.81f);
-    setParameterValue(processor->getAPVTS(), "mod_wheel_target", 0.0f);
+    setParameterValue(processor->getAPVTS(), "mod_wheel_target", 2.0f);
     setParameterValue(processor->getAPVTS(), "pitch_bend_range", 12.0f);
     setParameterValue(processor->getAPVTS(), "mod_lfo2_rate", 5.5f);
     setParameterValue(processor->getAPVTS(), "mod_lfo2_wave", 2.0f);
@@ -601,7 +601,7 @@ void testUserPresetRoundTripWithManifest()
             "Reloaded bass preset must restore LFO destination");
     require(std::abs(processor->getAPVTS().getRawParameterValue("macro_punch")->load() - 0.81f) < 1.0e-4f,
             "Reloaded bass preset must restore macro state");
-    require(std::abs(processor->getAPVTS().getRawParameterValue("mod_wheel_target")->load() - 0.0f) < 1.0e-4f,
+    require(std::abs(processor->getAPVTS().getRawParameterValue("mod_wheel_target")->load() - 2.0f) < 1.0e-4f,
             "Reloaded bass preset must restore mod wheel target");
     require(std::abs(processor->getAPVTS().getRawParameterValue("pitch_bend_range")->load() - 12.0f) < 1.0e-4f,
             "Reloaded bass preset must restore pitch bend range");
@@ -795,6 +795,36 @@ void testModulationMatrixAudibility()
     require(bufferIsFinite(modWheel) && bufferIsFinite(aftertouch), "Modulated renders must stay finite");
     require(bufferDifference(baseline, modWheel) > 0.5f, "Mod wheel route must produce an audible render difference");
     require(bufferDifference(baseline, aftertouch) > 0.5f, "Aftertouch route must produce an audible render difference");
+}
+
+void testModWheelCutoffTargetAudibility()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 256);
+
+    setParameterValue(processor->getAPVTS(), "selected_bass", 6.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "mod_wheel_target", 2.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(6, "cutoff"), 220.0f);
+
+    const std::vector<std::pair<int, juce::MidiMessage>> baselineEvents = {
+        { 0, juce::MidiMessage::noteOn(1, 40, (juce::uint8) 90) },
+        { 1024, juce::MidiMessage::noteOff(1, 40) }
+    };
+    const std::vector<std::pair<int, juce::MidiMessage>> modWheelEvents = {
+        { 0, juce::MidiMessage::controllerEvent(1, 1, 127) },
+        { 0, juce::MidiMessage::noteOn(1, 40, (juce::uint8) 90) },
+        { 1024, juce::MidiMessage::noteOff(1, 40) }
+    };
+
+    const auto baseline = renderWithMidi(*processor, baselineEvents, 4096);
+
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(6, "cutoff"), 220.0f);
+    const auto modWheel = renderWithMidi(*processor, modWheelEvents, 4096);
+
+    require(bufferIsFinite(modWheel), "Cutoff mod wheel render must stay finite");
+    require(bufferDifference(baseline, modWheel) > 0.5f, "Cutoff mod wheel route must produce an audible render difference");
 }
 
 void testFactoryPresetNamesAreUniquePerBank()
@@ -1110,14 +1140,16 @@ void testAllFactoryPresetsRenderStable()
         for (int presetIndex = 0; presetIndex < static_cast<int>(bank.size()); ++presetIndex)
         {
             processor->applyFactoryPreset(presetIndex);
+            const auto presetName = juce::String(juce::CharPointer_UTF8(bank[static_cast<std::size_t>(presetIndex)].name.c_str()));
+            const auto presetLabel = "Bass " + juce::String(bassIndex) + " preset " + juce::String(presetIndex) + " (" + presetName + ")";
             const std::vector<std::pair<int, juce::MidiMessage>> events = {
                 { 0, juce::MidiMessage::noteOn(1, 40, (juce::uint8) 100) },
                 { 800, juce::MidiMessage::noteOff(1, 40) }
             };
             const auto rendered = renderWithMidi(*processor, events, 4096);
-            require(bufferIsFinite(rendered), "Factory preset render must stay finite");
-            require(bufferPeak(rendered) >= musique::qa::minimumAudiblePeakLinear(), "Factory preset render must not be silent");
-            require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(), "Factory preset render must not clip past QA ceiling");
+            require(bufferIsFinite(rendered), presetLabel + ": render must stay finite");
+            require(bufferPeak(rendered) >= musique::qa::minimumAudiblePeakLinear(), presetLabel + ": render must not be silent");
+            require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(), presetLabel + ": render must not clip past QA ceiling");
         }
     }
 }
@@ -1508,6 +1540,7 @@ int main()
         maybeRunTest("testLegacyUserPresetLoadRegeneratesManifest", testLegacyUserPresetLoadRegeneratesManifest);
         maybeRunTest("testMainAndAuxRouting", testMainAndAuxRouting);
         maybeRunTest("testModulationMatrixAudibility", testModulationMatrixAudibility);
+        maybeRunTest("testModWheelCutoffTargetAudibility", testModWheelCutoffTargetAudibility);
         maybeRunTest("testSubControlRendersTrueSubOctave", testSubControlRendersTrueSubOctave);
         maybeRunTest("test808LfoTremPanIsAudible", test808LfoTremPanIsAudible);
         maybeRunTest("test808LfoCutoffIsAudible", test808LfoCutoffIsAudible);
