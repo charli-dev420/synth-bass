@@ -134,6 +134,9 @@ private:
         ParamBinding cutoff;
         ParamBinding pan;
         ParamBinding resonance;
+        ParamBinding pitchEnvTime;
+        ParamBinding snap;
+        ParamBinding envShape;
         ParamBinding output;
     };
 

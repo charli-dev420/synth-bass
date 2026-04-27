@@ -35,53 +35,62 @@ constexpr std::array<const char*, kNumFamilies> kFamilyNames = {
 constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
     // --- Acoustic ---
     // Contrebasse: warm, woody, plucked string with body resonance
-    { OscMode::Additive, 8, 0.0003f, 0.000f, 1,
+    // Phase 2: inharmonicity +, body feedback tamed, pluck reduced (less 'clack', more 'thud')
+    { OscMode::Additive, 8, 0.0006f, 0.000f, 1,
       0.0f, 0.0f,
       0.40f, 2.0f, 0.28f,
-      1.00f, 0.75f, 0.35f,
-      0.70f, 0.008f,
+      1.00f, 0.55f, 0.45f,
+      0.25f, 0.012f,
       0.0f, false },
     // Basse Fingered: electric bass fingerstyle, round, warm
-    { OscMode::Additive, 6, 0.00004f, 0.000f, 1,
+    // Phase 2: +1 partial (richer), inharmonicity -, pluck gentler (smoother attack)
+    { OscMode::Additive, 7, 0.00002f, 0.000f, 1,
       0.0f, 0.0f,
       0.45f, 1.8f, 0.25f,
       1.00f, 0.50f, 0.25f,
-      0.40f, 0.005f,
+      0.20f, 0.005f,
       0.0f, false },
     // Basse Slap: slap technique, bright attack, percussive
+    // Phase 2: pluckAmount 1.0 -> 0.85 (slightly less clack, more musical)
     { OscMode::Additive, 10, 0.00004f, 0.000f, 1,
       0.0f, 0.0f,
       0.55f, 1.2f, 0.18f,
       1.00f, 0.40f, 0.20f,
-      1.00f, 0.003f,
+      0.85f, 0.003f,
       0.0f, false },
 
     // --- 808 ---
     // Sub 808: pure sub sine, pitch drop, very clean
+    // FIX Phase 1: decay2Ratio 5.0 -> 2.2 (prevents 40s tail)
     { OscMode::Sine, 0, 0.0f, 0.0f, 1,
       7.0f, 0.06f,
-      0.25f, 5.0f, 0.35f,
+      0.25f, 2.2f, 0.35f,
       0.0f, 0.0f, 0.0f,
       0.0f, 0.0f,
       0.0f, true },
     // Boom 808: richer, bigger pitch drop, long sustain
-    // FIX Phase 2.3: Added body delay (0.35) + body damping (0.12) for subtle resonance
-    // This gives Boom 808 a "massif" feel instead of sounding "vide"
+    // FIX Phase 1: decay2Ratio 6.0 -> 2.5 (prevents 48s tail)
+    // FIX Phase 1: body resonator correctly placed (was wrongly in pluck fields)
+    //   bodyDelayRatio=0.35 -> resonance at ~1/3 below fundamental, bodyFeedback=0.10
+    // FIX Phase 1: pluck 0.35/0.12 removed (808 has no pluck transient noise)
     { OscMode::Additive, 5, 0.0001f, 0.0f, 1,
       8.0f, 0.08f,
-      0.20f, 6.0f, 0.40f,
-      0.0f, 0.0f, 0.0f,
-      0.35f, 0.12f,  // bodyDelayRatio=0.35 (5th harmonic), bodyDamping=0.12 (subtle)
+      0.20f, 2.5f, 0.40f,
+      0.35f, 0.10f, 0.20f,
+      0.0f, 0.0f,
       1.5f, true },
     // Distorted 808: saturated, aggressive, big pitch sweep
     // FIX: Reduced pitchEnvSemitones from 18.0 to 10.0 to prevent zipper/glitch
     // during sweep while keeping aggressive character. 10 st in 40ms = ~250 Hz/s.
+    // FIX Phase 1: decay2Ratio 3.0 -> 1.8 (saturation adds perceived sustain already)
+    // FIX Phase 1: builtInSaturation 4.0 -> 2.5 (was masking fundamental at C1)
+    // Phase 2: pitchEnvSemitones 10 -> 9, pitchEnvSeconds 0.04 -> 0.05 (smoother sweep)
     { OscMode::Sine, 0, 0.0f, 0.0f, 1,
-      10.0f, 0.04f,
-      0.35f, 3.0f, 0.25f,
+      9.0f, 0.05f,
+      0.35f, 1.8f, 0.25f,
       0.0f, 0.0f, 0.0f,
       0.0f, 0.0f,
-      4.0f, true },
+      2.5f, true },
 
     // --- Synth ---
     // Moog Bass: classic saw, warm saturation
@@ -111,10 +120,10 @@ constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
 // Default settings per bass
 // =========================================================================
 constexpr std::array<BassSettings, kNumBasses> kDefaults = {{
-    // Contrebasse                                                                            reso  glide
-    { 0.82f, 0.0f, 0.45f, 0.005f, 3.00f, 0.22f, 0.35f, 0.65f, 0.0f, 0.0f, 0.40f, 0.50f, 3000.0f, 0.0f, 0.20f, 0.0f, 0.0f },
+    // Contrebasse                                                                                          reso  glide
+    { 0.82f, 0.0f, 0.38f, 0.005f, 3.00f, 0.22f, 0.35f, 0.65f, 0.0f, 0.0f, 0.40f, 0.50f, 2400.0f, 0.0f, 0.20f, 0.0f, 0.0f },
     // Basse Fingered
-    { 0.84f, 0.0f, 0.50f, 0.004f, 2.50f, 0.25f, 0.25f, 0.45f, 0.0f, 0.0f, 0.50f, 0.45f, 3500.0f, 0.0f, 0.22f, 0.0f, 0.0f },
+    { 0.84f, 0.0f, 0.58f, 0.004f, 2.50f, 0.25f, 0.25f, 0.45f, 0.0f, 0.0f, 0.50f, 0.45f, 4200.0f, 0.0f, 0.22f, 0.0f, 0.0f },
     // Basse Slap
     { 0.85f, 0.0f, 0.65f, 0.001f, 1.50f, 0.15f, 0.15f, 0.35f, 0.10f, 0.0f, 0.45f, 0.60f, 5000.0f, 0.0f, 0.25f, 0.0f, 0.0f },
     // Sub 808
@@ -122,7 +131,7 @@ constexpr std::array<BassSettings, kNumBasses> kDefaults = {{
     // Boom 808
     { 0.88f, 0.0f, 0.30f, 0.003f, 6.00f, 0.40f, 0.35f, 0.0f, 0.15f, 0.65f, 0.75f, 0.55f, 1200.0f, 0.0f, 0.18f, 0.0f, 0.0f },
     // Distorted 808
-    { 0.85f, 0.0f, 0.35f, 0.001f, 3.00f, 0.20f, 0.20f, 0.0f, 0.55f, 0.90f, 0.60f, 0.65f, 1500.0f, 0.0f, 0.30f, 0.0f, 0.0f },
+    { 0.85f, 0.0f, 0.35f, 0.001f, 3.00f, 0.20f, 0.20f, 0.0f, 0.55f, 0.90f, 0.60f, 0.65f, 1100.0f, 0.0f, 0.30f, 0.0f, 0.0f },
     // Moog Bass
     { 0.82f, 0.0f, 0.55f, 0.003f, 2.50f, 0.30f, 0.25f, 0.0f, 0.20f, 0.0f, 0.35f, 0.50f, 2000.0f, 0.0f, 0.45f, 0.05f, 0.58f },
     // Reese Bass
@@ -317,6 +326,37 @@ void maskUnavailableFx(const int bassIndex, GlobalFxSettings& fx)
     if (!a.delay)      fx.delayOn      = false;
     if (!a.reverb)     fx.reverbOn     = false;
     if (!a.limiter)    fx.limiterOn    = false;
+}
+
+GlobalFxSettings getDefaultGlobalFx(const int bassIndex)
+{
+    GlobalFxSettings fx;
+    const Family family = getFamily(bassIndex);
+
+    if (family == Family::Eight08)
+    {
+        // 808 family: compressor ON — glues the pitch drop without transient loss
+        fx.compressorOn  = true;
+        fx.compThreshold = -16.0f;
+        fx.compRatio     = 2.5f;
+        fx.compAttack    = 8.0f;
+        fx.compRelease   = 90.0f;
+        fx.compMix       = 0.6f;
+
+        if (bassIndex == 5)  // Distorted 808: built-in sat already baked — keep satMix neutral
+            fx.satMix = 0.0f;
+    }
+    else if (bassIndex == 7)  // Reese: dense unison needs glue compressor
+    {
+        fx.compressorOn  = true;
+        fx.compThreshold = -14.0f;
+        fx.compRatio     = 3.0f;
+        fx.compAttack    = 8.0f;
+        fx.compRelease   = 90.0f;
+        fx.compMix       = 0.6f;
+    }
+
+    return fx;
 }
 
 bool supportsBodyControl(const int bassIndex)

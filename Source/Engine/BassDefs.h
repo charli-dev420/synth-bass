@@ -73,6 +73,9 @@ struct BassSettings
     float resonance      = 0.3f;      // filter resonance (0–1), independent from brightness
     float glideTime      = 0.0f;      // portamento time in seconds (0 = off)
     float filterEnv      = 0.0f;      // dedicated filter envelope depth (0–1)
+    float pitchEnvTime   = 0.0f;      // 0.0 = use chars default, >0 = override pitch env time in seconds
+    float snap           = 1.0f;      // scale factor for chars.pluckAmount (1.0 = neutral, 0 = no pluck)
+    float envShape       = 0.5f;      // 0.0 = punchy (fast d1, slow d2), 1.0 = long tail (slow d1, fast d2)
 };
 
 // =========================================================================
@@ -186,6 +189,7 @@ const char*                getBassDescription (int bassIndex);
 const FxAvailability&      getFxAvailability  (int bassIndex);
 bool                       isFxAvailable      (int bassIndex, GlobalFxSlot slot);
 void                       maskUnavailableFx  (int bassIndex, GlobalFxSettings& fx);
+GlobalFxSettings           getDefaultGlobalFx (int bassIndex);  // per-family FX defaults (compressor ON for 808, satMix=0 for Distorted808)
 bool                       supportsBodyControl(int bassIndex);
 bool                       supportsPitchEnvControl(int bassIndex);
 bool                       supportsFilterEnvControl(int bassIndex);

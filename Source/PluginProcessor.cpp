@@ -1075,6 +1075,15 @@ BassSynthAudioProcessor::createParameterLayout()
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             makeBassParamId(b, "resonance"), prefix + "Resonance",
             juce::NormalisableRange<float>(0.0f, 1.0f, 0.0001f), def.resonance));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            makeBassParamId(b, "pitch_env_time"), prefix + "Pitch Env Time",
+            juce::NormalisableRange<float>(0.0f, 0.60f, 0.001f, 0.35f), 0.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            makeBassParamId(b, "snap"), prefix + "Snap",
+            juce::NormalisableRange<float>(0.0f, 1.0f, 0.0001f), 1.0f));
+        layout.add(std::make_unique<juce::AudioParameterFloat>(
+            makeBassParamId(b, "env_shape"), prefix + "Env Shape",
+            juce::NormalisableRange<float>(0.0f, 1.0f, 0.0001f), 0.5f));
 
         layout.add(std::make_unique<juce::AudioParameterChoice>(
             makeBassParamId(b, kBassOutputSuffix), prefix + "Output",
@@ -1190,8 +1199,11 @@ void BassSynthAudioProcessor::resolveParameterPointers()
         refs.character  = bindParam(parameters, makeBassParamId(bassIndex, "character"));
         refs.cutoff     = bindParam(parameters, makeBassParamId(bassIndex, "cutoff"));
         refs.pan        = bindParam(parameters, makeBassParamId(bassIndex, "pan"));
-        refs.resonance  = bindParam(parameters, makeBassParamId(bassIndex, "resonance"));
-        refs.output     = bindParam(parameters, makeBassParamId(bassIndex, kBassOutputSuffix));
+        refs.resonance    = bindParam(parameters, makeBassParamId(bassIndex, "resonance"));
+        refs.pitchEnvTime = bindParam(parameters, makeBassParamId(bassIndex, "pitch_env_time"));
+        refs.snap         = bindParam(parameters, makeBassParamId(bassIndex, "snap"));
+        refs.envShape     = bindParam(parameters, makeBassParamId(bassIndex, "env_shape"));
+        refs.output       = bindParam(parameters, makeBassParamId(bassIndex, kBassOutputSuffix));
     }
 }
 
@@ -2425,8 +2437,11 @@ mbs::BassSettings BassSynthAudioProcessor::sanitizeBassSettings(int bassIndex, c
     sanitized.character = sanitizeParameterValue(makeBassParamId(bassIndex, "character"), sanitized.character, mbs::getDefaultSettings(bassIndex).character);
     sanitized.cutoffHz = sanitizeParameterValue(makeBassParamId(bassIndex, "cutoff"), sanitized.cutoffHz, mbs::getDefaultSettings(bassIndex).cutoffHz);
     sanitized.pan = sanitizeParameterValue(makeBassParamId(bassIndex, "pan"), sanitized.pan, mbs::getDefaultSettings(bassIndex).pan);
-    sanitized.resonance = sanitizeParameterValue(makeBassParamId(bassIndex, "resonance"), sanitized.resonance, mbs::getDefaultSettings(bassIndex).resonance);
-    sanitized.glideTime = sanitizeParameterValue(kGlideTime, sanitized.glideTime, mbs::getDefaultSettings(bassIndex).glideTime);
+    sanitized.resonance    = sanitizeParameterValue(makeBassParamId(bassIndex, "resonance"),    sanitized.resonance,    mbs::getDefaultSettings(bassIndex).resonance);
+    sanitized.pitchEnvTime = sanitizeParameterValue(makeBassParamId(bassIndex, "pitch_env_time"), sanitized.pitchEnvTime, 0.0f);
+    sanitized.snap         = sanitizeParameterValue(makeBassParamId(bassIndex, "snap"),          sanitized.snap,         1.0f);
+    sanitized.envShape     = sanitizeParameterValue(makeBassParamId(bassIndex, "env_shape"),     sanitized.envShape,     0.5f);
+    sanitized.glideTime    = sanitizeParameterValue(kGlideTime, sanitized.glideTime, mbs::getDefaultSettings(bassIndex).glideTime);
     return sanitized;
 }
 
@@ -2656,8 +2671,11 @@ mbs::BassSettings BassSynthAudioProcessor::snapshotBassSettings(int bassIndex) c
     settings.character = readCachedParamValue(refs.character, settings.character);
     settings.cutoffHz = readCachedParamValue(refs.cutoff, settings.cutoffHz);
     settings.pan = readCachedParamValue(refs.pan, settings.pan);
-    settings.resonance = readCachedParamValue(refs.resonance, settings.resonance);
-    settings.glideTime = readCachedParamValue(globalParamRefs.glideTime, settings.glideTime);
+    settings.resonance    = readCachedParamValue(refs.resonance,    settings.resonance);
+    settings.pitchEnvTime = readCachedParamValue(refs.pitchEnvTime, settings.pitchEnvTime);
+    settings.snap         = readCachedParamValue(refs.snap,         settings.snap);
+    settings.envShape     = readCachedParamValue(refs.envShape,     settings.envShape);
+    settings.glideTime    = readCachedParamValue(globalParamRefs.glideTime, settings.glideTime);
 
     settings = sanitizeBassSettings(bassIndex, settings);
     applyPerformanceMacros(bassIndex, settings);
@@ -2677,7 +2695,10 @@ void BassSynthAudioProcessor::applyBassSettingsToParams(int bassIndex, const mbs
     setParamValueInternal(makeBassParamId(bassIndex, "body"), sanitized.body, notifyHost);
     setParamValueInternal(makeBassParamId(bassIndex, "drive"), sanitized.drive, notifyHost);
     setParamValueInternal(makeBassParamId(bassIndex, "pitch_env"), sanitized.pitchEnv, notifyHost);
-    setParamValueInternal(makeBassParamId(bassIndex, "filter_env"), sanitized.filterEnv, notifyHost);
+    setParamValueInternal(makeBassParamId(bassIndex, "filter_env"),    sanitized.filterEnv,    notifyHost);
+    setParamValueInternal(makeBassParamId(bassIndex, "pitch_env_time"), sanitized.pitchEnvTime, notifyHost);
+    setParamValueInternal(makeBassParamId(bassIndex, "snap"),           sanitized.snap,         notifyHost);
+    setParamValueInternal(makeBassParamId(bassIndex, "env_shape"),      sanitized.envShape,     notifyHost);
     setParamValueInternal(makeBassParamId(bassIndex, "sub"), sanitized.subLevel, notifyHost);
     setParamValueInternal(makeBassParamId(bassIndex, "character"), sanitized.character, notifyHost);
     setParamValueInternal(makeBassParamId(bassIndex, "cutoff"), sanitized.cutoffHz, notifyHost);

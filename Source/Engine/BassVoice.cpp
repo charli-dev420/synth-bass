@@ -23,7 +23,7 @@ void BassVoice::updateEnvelopeCoefficients(float sampleRate) noexcept
     decay1Coeff  = std::exp(-1.0f / (d1Time * fsr));
     decay1Target = chars.sustainPlatform * settings.sustainLevel;
 
-    const float d2Time = std::max(0.05f, decaySeconds * chars.decay2Ratio);
+    const float d2Time = std::min(8.0f, std::max(0.05f, decaySeconds * chars.decay2Ratio));
     decay2Coeff = std::exp(-1.0f / (d2Time * fsr));
 
     if (!quickReleaseForced)
@@ -174,8 +174,8 @@ void BassVoice::noteOn(const BassSettings& s,
                 const float qHarm = 1.0f + (1.0f - settings.brightness) * 2.0f;
                 const float dScale = 1.0f /
                     (1.0f + qHarm * std::pow(static_cast<float>(harmonic), 1.5f) * 0.05f);
-                const float dTime = std::max(0.02f,
-                    settings.decaySeconds * chars.decay2Ratio * dScale);
+                const float dTime = std::min(8.0f, std::max(0.02f,
+                    settings.decaySeconds * chars.decay2Ratio * dScale));
 
                 auto& p = partials[static_cast<std::size_t>(n)];
                 p.phase     = 0.0f;
@@ -222,6 +222,10 @@ void BassVoice::noteOn(const BassSettings& s,
     else
         pitchEnvDecayCoeff = 0.0f;
 
+    // Override pitch envelope time if set by preset (>0 = explicit override in seconds)
+    if (settings.pitchEnvTime > 0.005f)
+        pitchEnvDecayCoeff = std::exp(-1.0f / (settings.pitchEnvTime * fsr));
+
     // ----- Amplitude envelope (exponential attack) -----
     if (baseAttackSeconds > 0.0001f)
     {
@@ -234,11 +238,16 @@ void BassVoice::noteOn(const BassSettings& s,
         attackCoeff = 1.0f;
     }
 
-    const float d1Time = std::max(0.01f, baseDecaySeconds * chars.decay1Ratio);
+    // Env shape: modulate decay ratios (0 = punchy: fast d1 long d2, 1 = tail: slow d1 short d2)
+    const float shape    = juce::jlimit(0.0f, 1.0f, settings.envShape);
+    const float d1RatioEff = juce::jmap(shape, 0.0f, 1.0f, chars.decay1Ratio * 1.4f, chars.decay1Ratio * 0.6f);
+    const float d2RatioEff = juce::jmap(shape, 0.0f, 1.0f, chars.decay2Ratio * 0.5f, chars.decay2Ratio * 1.4f);
+
+    const float d1Time = std::max(0.01f, baseDecaySeconds * d1RatioEff);
     decay1Coeff  = std::exp(-1.0f / (d1Time * fsr));
     decay1Target = chars.sustainPlatform * settings.sustainLevel;
 
-    const float d2Time = std::max(0.05f, baseDecaySeconds * chars.decay2Ratio);
+    const float d2Time = std::min(8.0f, std::max(0.05f, baseDecaySeconds * d2RatioEff));
     decay2Coeff  = std::exp(-1.0f / (d2Time * fsr));
 
     releaseCoeff = std::exp(-1.0f / (std::max(0.005f, baseReleaseSeconds) * fsr));
@@ -247,6 +256,7 @@ void BassVoice::noteOn(const BassSettings& s,
 
     // ----- Pluck transient -----
     pluckLevel = chars.pluckAmount * vel * (0.5f + settings.brightness * 0.5f);
+    pluckLevel *= juce::jlimit(0.0f, 2.0f, settings.snap);  // Snap: 0 = no pluck, 1 = chars default, 2 = double
     if (chars.pluckSeconds > 0.0001f)
         pluckDecayCoeff = std::exp(-1.0f / (chars.pluckSeconds * fsr));
     else
@@ -297,6 +307,14 @@ void BassVoice::noteOn(const BassSettings& s,
     svfBand = 0.0f;
     svfLow2  = 0.0f;
     svfBand2 = 0.0f;
+    hpfState      = 0.0f;
+    pluckLpState  = 0.0f;
+    unisonLpState = 0.0f;
+    // Reese (≥3 oscs): precompute 1-pole LP coeff at min(4000, cutoffHz × 1.4) Hz
+    unisonLpCoeff = (numOscs >= 3)
+        ? 1.0f - std::exp(-juce::MathConstants<float>::twoPi
+                          * std::min(4000.0f, settings.cutoffHz * 1.4f) / fsr)
+        : 1.0f;
 
     // Enable 24dB/oct for synth family (Moog, Reese, Acid) — steeper filter
     filter24dB = (chars.oscMode == OscMode::Saw || chars.oscMode == OscMode::Square);
@@ -516,6 +534,12 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
     auto* left  = buffer.getWritePointer(0);
     auto* right = numChannels > 1 ? buffer.getWritePointer(1) : nullptr;
 
+    // HPF post-saturation: removes DC asymmetry from tanh on high-drive sub-bass
+    const bool needsHpf = chars.isSubBass && chars.builtInSaturation > 1.5f;
+    const float hpfAlpha = needsHpf
+        ? static_cast<float>(juce::MathConstants<double>::twoPi * 35.0 / std::max(1.0, sr))
+        : 0.0f;
+
     for (int i = 0; i < numSamples; ++i)
     {
         if (envState == EnvState::Off)
@@ -704,7 +728,15 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
 
             // Normalise unison
             if (numOscs > 1)
+            {
                 signal /= static_cast<float>(numOscs);
+                // Reese: 1-pole LP reduces HF unison beating; coeff = 1.0 on other voices (bypass)
+                if (unisonLpCoeff < 0.999f)
+                {
+                    unisonLpState += unisonLpCoeff * (signal - unisonLpState);
+                    signal = unisonLpState;
+                }
+            }
         }
 
         // ---- Sub oscillator ----
@@ -724,7 +756,10 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
         if (pluckLevel > 0.001f)
         {
             const float noise = rng.nextFloat() * 2.0f - 1.0f;
-            signal += noise * pluckLevel * 0.25f;
+            // Slap (pluckAmount ≥ 0.75): 1-pole LP ~8 kHz softens pluck HF before hi-hats collide
+            pluckLpState += 0.68f * (noise - pluckLpState);
+            const float pluckNoise = (chars.pluckAmount >= 0.75f) ? pluckLpState : noise;
+            signal += pluckNoise * pluckLevel * 0.25f;
             pluckLevel *= pluckDecayCoeff;
         }
 
@@ -772,6 +807,13 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
                 const float drv = 1.0f + totalDrive;
                 signal = std::tanh(signal * drv) / std::max(0.01f, std::tanh(drv));
             }
+        }
+
+        // ---- Post-saturation HPF (35 Hz) — sub-bass with high built-in drive ----
+        if (needsHpf)
+        {
+            hpfState += hpfAlpha * (signal - hpfState);
+            signal -= hpfState;
         }
 
         // ---- Character processing ----

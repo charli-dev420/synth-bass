@@ -137,6 +137,10 @@ private:
     float bodyDelaySamples = 100.0f;
     float bodyFeedback     = 0.0f;
     float bodyDampState    = 0.0f;
+    float hpfState         = 0.0f;  // 1-pole HPF state for post-saturation DC removal
+    float pluckLpState     = 0.0f;  // 1-pole LP state for Slap pluck HF rolloff (~8 kHz)
+    float unisonLpState    = 0.0f;  // 1-pole LP state for Reese unison HF rolloff
+    float unisonLpCoeff    = 1.0f;  // LP coeff precomputed in noteOn (1.0 = bypass)
 
     // Pan
     float panL = 0.7071f;

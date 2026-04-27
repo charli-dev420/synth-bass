@@ -43,12 +43,12 @@ PresetMetadata buildPresetMetadata(const int bassIndex, const InstrumentPreset& 
         case Family::Acoustic:
             metadata.familyLabel = "acoustic";
             metadata.mixRole = "organic-foundation";
-            metadata.nominalPeakDb = -12.0f;
+            metadata.nominalPeakDb = -10.5f;
             break;
         case Family::Eight08:
             metadata.familyLabel = "808";
             metadata.mixRole = "sub-foundation";
-            metadata.nominalPeakDb = -9.5f;
+            metadata.nominalPeakDb = -10.5f;
             break;
         case Family::Synth:
         default:
@@ -68,6 +68,17 @@ PresetMetadata buildPresetMetadata(const int bassIndex, const InstrumentPreset& 
           return false;
         };
 
+        // Parameter-based lead-bass for Synth: open filter + significant resonance (§6.2)
+        if (family == Family::Synth
+            && preset.settings.cutoffHz >= 2500.0f
+            && preset.settings.resonance >= 0.40f
+            && !hasAnyToken({ "ambient", "pad", "drone", "atmosph" }))
+        {
+          metadata.mixRole = "lead-bass";
+          metadata.nominalPeakDb = -9.0f;
+        }
+
+        // Name-based overrides (checked last so explicit naming wins)
         if (hasAnyToken({ "slap", "punch", "attack", "staccato" }))
         {
           metadata.mixRole = "transient-bass";
@@ -77,11 +88,6 @@ PresetMetadata buildPresetMetadata(const int bassIndex, const InstrumentPreset& 
         {
           metadata.mixRole = "texture-bass";
           metadata.nominalPeakDb = -13.5f;
-        }
-        else if (family == Family::Synth && hasAnyToken({ "lead" }))
-        {
-          metadata.mixRole = "lead-bass";
-          metadata.nominalPeakDb = -9.0f;
         }
 
     addTag(metadata.tags, metadata.familyLabel);
@@ -423,8 +429,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
                 0.00f, 0.85f, 0.62f, 0.50f, 700.0f, 0.0f, 0.15f, 0.0f } },
             // --- Travaill\xC3\xA9s ---
             { "Reggaeton Sub",
-              { 0.76f, 0.0f, 0.20f, 0.002f, 3.8f, 0.38f, 0.28f, 0.0f,
-                0.00f, 0.88f, 0.72f, 0.50f, 700.0f, 0.0f, 0.16f, 0.0f } },
+              { 0.76f, 0.0f, 0.30f, 0.002f, 2.5f, 0.28f, 0.22f, 0.0f,
+                0.00f, 0.95f, 0.68f, 0.55f, 1100.0f, 0.0f, 0.16f, 0.0f } },
             { "Sub Vibrant",
               { 0.75f, 0.0f, 0.18f, 0.003f, 5.5f, 0.48f, 0.38f, 0.0f,
                 0.00f, 0.78f, 0.75f, 0.45f, 660.0f, 0.0f, 0.14f, 0.0f } },
@@ -435,17 +441,17 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.78f, 0.0f, 0.24f, 0.001f, 2.8f, 0.28f, 0.18f, 0.0f,
                 0.02f, 0.92f, 0.66f, 0.52f, 740.0f, 0.0f, 0.16f, 0.0f } },
             { "Jersey Club",
-              { 0.76f, 0.0f, 0.22f, 0.002f, 3.0f, 0.32f, 0.22f, 0.0f,
-                0.00f, 0.88f, 0.68f, 0.50f, 720.0f, 0.0f, 0.15f, 0.0f } },
+              { 0.76f, 0.0f, 0.35f, 0.002f, 2.0f, 0.20f, 0.18f, 0.0f,
+                0.02f, 0.92f, 0.65f, 0.55f, 1400.0f, 0.0f, 0.15f, 0.0f } },
             { "Sub Mono Glide",
-              { 0.75f, 0.0f, 0.18f, 0.002f, 5.0f, 0.45f, 0.35f, 0.0f,
-                0.00f, 0.75f, 0.72f, 0.45f, 680.0f, 0.0f, 0.14f, 0.10f } },
+              { 0.74f, 0.0f, 0.28f, 0.003f, 3.5f, 0.35f, 0.25f, 0.0f,
+                0.00f, 0.88f, 0.55f, 0.52f, 1200.0f, 0.0f, 0.18f, 0.15f } },
             { "Sub Distortion L\xC3\xA9g\xC3\xA8re",
               { 0.76f, 0.0f, 0.25f, 0.002f, 4.0f, 0.38f, 0.28f, 0.0f,
                 0.08f, 0.82f, 0.68f, 0.52f, 800.0f, 0.0f, 0.18f, 0.0f } },
             { "Grime Sub",
-              { 0.78f, 0.0f, 0.22f, 0.002f, 3.5f, 0.35f, 0.25f, 0.0f,
-                0.04f, 0.90f, 0.70f, 0.52f, 720.0f, 0.0f, 0.16f, 0.0f } },
+              { 0.78f, 0.0f, 0.30f, 0.002f, 2.5f, 0.25f, 0.22f, 0.0f,
+                0.12f, 0.95f, 0.65f, 0.55f, 1200.0f, 0.0f, 0.20f, 0.0f } },
             { "Sub Pad Atmosph\xC3\xA8re",
               { 0.74f, 0.0f, 0.14f, 0.010f, 10.0f, 0.60f, 0.70f, 0.0f,
                 0.00f, 0.50f, 0.80f, 0.35f, 500.0f, 0.0f, 0.10f, 0.0f } },
@@ -580,8 +586,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.75f, 0.0f, 0.44f, 0.001f, 3.0f, 0.22f, 0.18f, 0.0f,
                 0.75f, 0.88f, 0.56f, 0.70f, 1800.0f, 0.0f, 0.35f, 0.0f } },
             { "Industrial 808",
-              { 0.76f, 0.0f, 0.50f, 0.001f, 2.2f, 0.18f, 0.15f, 0.0f,
-                0.95f, 0.95f, 0.48f, 0.85f, 2500.0f, 0.0f, 0.45f, 0.0f } },
+              { 0.76f, 0.0f, 0.65f, 0.001f, 1.2f, 0.10f, 0.10f, 0.0f,
+                0.95f, 0.96f, 0.44f, 0.88f, 4500.0f, 0.0f, 0.50f, 0.0f } },
             { "808 Scream",
               { 0.78f, 0.0f, 0.55f, 0.001f, 1.8f, 0.12f, 0.10f, 0.0f,
                 0.98f, 0.98f, 0.45f, 0.90f, 2800.0f, 0.0f, 0.48f, 0.0f } },
@@ -596,8 +602,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.75f, 0.0f, 0.35f, 0.002f, 5.0f, 0.40f, 0.35f, 0.0f,
                 0.50f, 0.70f, 0.65f, 0.58f, 1200.0f, 0.0f, 0.26f, 0.0f } },
             { "808 Fuzz",
-              { 0.74f, 0.0f, 0.48f, 0.001f, 2.5f, 0.18f, 0.15f, 0.0f,
-                0.90f, 0.92f, 0.50f, 0.80f, 2200.0f, 0.0f, 0.42f, 0.0f } },
+              { 0.74f, 0.0f, 0.32f, 0.002f, 3.5f, 0.30f, 0.28f, 0.0f,
+                0.78f, 0.85f, 0.58f, 0.68f, 1200.0f, 0.0f, 0.28f, 0.0f } },
             { "Distort Glide",
               { 0.75f, 0.0f, 0.40f, 0.001f, 3.5f, 0.25f, 0.20f, 0.0f,
                 0.72f, 0.88f, 0.58f, 0.68f, 1700.0f, 0.0f, 0.32f, 0.06f } },
@@ -608,11 +614,11 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.74f, 0.0f, 0.28f, 0.005f, 6.0f, 0.45f, 0.50f, 0.0f,
                 0.42f, 0.65f, 0.68f, 0.55f, 1000.0f, 0.0f, 0.22f, 0.0f } },
             { "808 Broken Speaker",
-              { 0.76f, 0.0f, 0.52f, 0.001f, 2.2f, 0.15f, 0.12f, 0.0f,
-                0.96f, 0.94f, 0.48f, 0.88f, 2600.0f, 0.0f, 0.45f, 0.0f } },
+              { 0.74f, 0.0f, 0.35f, 0.003f, 3.0f, 0.28f, 0.25f, 0.0f,
+                0.68f, 0.88f, 0.56f, 0.70f, 1400.0f, 0.0f, 0.30f, 0.0f } },
             { "Distort Bounce",
-              { 0.76f, 0.0f, 0.42f, 0.001f, 3.0f, 0.22f, 0.18f, 0.0f,
-                0.78f, 0.90f, 0.55f, 0.72f, 1800.0f, 0.0f, 0.36f, 0.0f } },
+              { 0.78f, 0.0f, 0.55f, 0.001f, 1.5f, 0.15f, 0.12f, 0.0f,
+                0.78f, 0.96f, 0.50f, 0.78f, 2800.0f, 0.0f, 0.42f, 0.0f } },
             { "808 Tape Sat",
               { 0.74f, 0.0f, 0.35f, 0.002f, 4.0f, 0.35f, 0.30f, 0.0f,
                 0.48f, 0.78f, 0.62f, 0.58f, 1300.0f, 0.0f, 0.26f, 0.0f } },
@@ -689,8 +695,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.86f, 0.0f, 0.60f, 0.001f, 1.0f, 0.08f, 0.06f, 0.0f,
                 0.25f, 0.0f, 0.30f, 0.60f, 3500.0f, 0.0f, 0.45f, 0.0f } },
             { "Moog Glide Legato",
-              { 0.82f, 0.0f, 0.52f, 0.003f, 2.5f, 0.40f, 0.28f, 0.0f,
-                0.18f, 0.0f, 0.38f, 0.50f, 2000.0f, 0.0f, 0.42f, 0.12f } },
+              { 0.80f, 0.0f, 0.38f, 0.008f, 4.0f, 0.55f, 0.42f, 0.0f,
+                0.08f, 0.0f, 0.40f, 0.45f, 1000.0f, 0.0f, 0.32f, 0.14f } },
             { "Moog EQ Boost",
               { 0.82f, 0.0f, 0.68f, 0.002f, 2.0f, 0.32f, 0.22f, 0.0f,
                 0.25f, 0.0f, 0.32f, 0.62f, 3200.0f, 0.0f, 0.50f, 0.03f } },
@@ -733,14 +739,14 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.78f, 0.0f, 0.38f, 0.006f, 4.0f, 0.42f, 0.50f, 0.0f,
                 0.10f, 0.0f, 0.55f, 0.58f, 1000.0f, 0.0f, 0.25f, 0.0f } },
             { "Reese Menace",
-              { 0.84f, 0.0f, 0.50f, 0.003f, 3.0f, 0.30f, 0.35f, 0.0f,
-                0.28f, 0.0f, 0.45f, 0.72f, 1600.0f, 0.0f, 0.38f, 0.0f } },
+              { 0.84f, 0.0f, 0.38f, 0.003f, 2.0f, 0.20f, 0.30f, 0.0f,
+                0.40f, 0.0f, 0.45f, 0.80f, 2800.0f, 0.0f, 0.45f, 0.0f } },
             { "Reese Sub Deep",
               { 0.80f, 0.0f, 0.28f, 0.008f, 5.5f, 0.52f, 0.60f, 0.0f,
                 0.05f, 0.0f, 0.62f, 0.50f,  750.0f, 0.0f, 0.20f, 0.0f } },
             { "Reese Techno",
-              { 0.80f, 0.0f, 0.44f, 0.004f, 3.5f, 0.35f, 0.42f, 0.0f,
-                0.15f, 0.0f, 0.48f, 0.62f, 1300.0f, 0.0f, 0.30f, 0.0f } },
+              { 0.82f, 0.0f, 0.60f, 0.002f, 2.0f, 0.25f, 0.30f, 0.0f,
+                0.28f, 0.0f, 0.44f, 0.70f, 2200.0f, 0.0f, 0.35f, 0.0f } },
             { "Reese Filthy",
               { 0.84f, 0.0f, 0.55f, 0.003f, 2.5f, 0.28f, 0.32f, 0.0f,
                 0.32f, 0.0f, 0.42f, 0.75f, 1800.0f, 0.0f, 0.40f, 0.0f } },
@@ -749,14 +755,14 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.76f, 0.0f, 0.30f, 0.012f, 7.0f, 0.55f, 0.70f, 0.0f,
                 0.06f, 0.0f, 0.60f, 0.52f,  800.0f, 0.0f, 0.22f, 0.0f } },
             { "Reese Aggro",
-              { 0.86f, 0.0f, 0.55f, 0.002f, 2.5f, 0.25f, 0.30f, 0.0f,
-                0.30f, 0.0f, 0.42f, 0.75f, 1800.0f, 0.0f, 0.40f, 0.0f } },
+              { 0.86f, 0.0f, 0.70f, 0.001f, 1.5f, 0.18f, 0.22f, 0.0f,
+                0.42f, 0.0f, 0.38f, 0.82f, 3000.0f, 0.0f, 0.48f, 0.0f } },
             { "Reese Pad Lush",
               { 0.74f, 0.0f, 0.28f, 0.015f, 8.0f, 0.58f, 0.80f, 0.0f,
                 0.04f, 0.0f, 0.62f, 0.48f,  700.0f, 0.0f, 0.18f, 0.0f } },
             { "Reese Roller",
-              { 0.80f, 0.0f, 0.42f, 0.005f, 4.0f, 0.38f, 0.48f, 0.0f,
-                0.14f, 0.0f, 0.52f, 0.62f, 1200.0f, 0.0f, 0.28f, 0.0f } },
+              { 0.78f, 0.0f, 0.32f, 0.005f, 6.0f, 0.50f, 0.60f, 0.0f,
+                0.08f, 0.0f, 0.58f, 0.58f, 900.0f, 0.0f, 0.22f, 0.0f } },
             { "Reese Dark Matter",
               { 0.82f, 0.0f, 0.48f, 0.004f, 3.5f, 0.32f, 0.40f, 0.0f,
                 0.20f, 0.0f, 0.48f, 0.68f, 1400.0f, 0.0f, 0.32f, 0.0f } },
@@ -830,8 +836,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.80f, 0.0f, 0.55f, 0.002f, 2.5f, 0.35f, 0.22f, 0.0f,
                 0.15f, 0.0f, 0.32f, 0.55f, 2200.0f, 0.0f, 0.52f, 0.10f } },
             { "Acid Minimal",
-              { 0.78f, 0.0f, 0.50f, 0.002f, 2.0f, 0.30f, 0.18f, 0.0f,
-                0.12f, 0.0f, 0.30f, 0.52f, 2000.0f, 0.0f, 0.48f, 0.03f } },
+              { 0.78f, 0.0f, 0.35f, 0.003f, 3.0f, 0.20f, 0.18f, 0.0f,
+                0.02f, 0.0f, 0.30f, 0.45f, 1200.0f, 0.0f, 0.40f, 0.03f } },
             { "Acid Drive Lourd",
               { 0.86f, 0.0f, 0.72f, 0.001f, 1.2f, 0.15f, 0.10f, 0.0f,
                 0.42f, 0.0f, 0.22f, 0.78f, 4000.0f, 0.0f, 0.65f, 0.02f } },
@@ -842,8 +848,8 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
               { 0.84f, 0.0f, 0.65f, 0.001f, 1.5f, 0.20f, 0.12f, 0.0f,
                 0.25f, 0.0f, 0.25f, 0.68f, 3200.0f, 0.0f, 0.58f, 0.02f } },
             { "Acid Filter Env",
-              { 0.82f, 0.0f, 0.60f, 0.001f, 1.5f, 0.22f, 0.12f, 0.0f,
-                0.20f, 0.0f, 0.28f, 0.62f, 2800.0f, 0.0f, 0.60f, 0.03f } },
+              { 0.82f, 0.0f, 0.42f, 0.004f, 1.0f, 0.10f, 0.10f, 0.0f,
+                0.08f, 0.0f, 0.28f, 0.52f, 700.0f, 0.0f, 0.72f, 0.02f } },
             { "Acid Sustain",
               { 0.80f, 0.0f, 0.52f, 0.003f, 3.0f, 0.40f, 0.28f, 0.0f,
                 0.12f, 0.0f, 0.32f, 0.52f, 2000.0f, 0.0f, 0.48f, 0.04f } },
@@ -859,6 +865,7 @@ const std::array<std::vector<InstrumentPreset>, kNumBasses>& getFactoryPresetBan
             auto& bank = presetBanks[static_cast<std::size_t>(bassIndex)];
             for (auto& preset : bank)
             {
+                preset.fx = getDefaultGlobalFx(bassIndex);
                 maskUnavailableFx(bassIndex, preset.fx);
                 preset.outputBus = std::clamp(preset.outputBus, 0, 4);
                 preset.metadata = buildPresetMetadata(bassIndex, preset);
