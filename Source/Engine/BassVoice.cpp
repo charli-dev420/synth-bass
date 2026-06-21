@@ -7,6 +7,143 @@
 namespace mbs
 {
 
+BassVoice::AtomicVoiceModulation::AtomicVoiceModulation(const AtomicVoiceModulation& other) noexcept
+{
+    VoiceModulation snapshot {};
+    if (other.tryRead(snapshot))
+        reset(snapshot);
+    else
+        reset();
+}
+
+BassVoice::AtomicVoiceModulation& BassVoice::AtomicVoiceModulation::operator=(const AtomicVoiceModulation& other) noexcept
+{
+    if (this == &other)
+        return *this;
+
+    VoiceModulation snapshot {};
+    if (other.tryRead(snapshot))
+        reset(snapshot);
+    else
+        reset();
+    return *this;
+}
+
+void BassVoice::AtomicVoiceModulation::reset(const VoiceModulation& modulation) noexcept
+{
+    sequence.store(0, std::memory_order_relaxed);
+    cutoffMul.store(modulation.cutoffMul, std::memory_order_relaxed);
+    resonanceAdd.store(modulation.resonanceAdd, std::memory_order_relaxed);
+    panAdd.store(modulation.panAdd, std::memory_order_relaxed);
+    attackScale.store(modulation.attackScale, std::memory_order_relaxed);
+    decayScale.store(modulation.decayScale, std::memory_order_relaxed);
+    pitchSemi.store(modulation.pitchSemi, std::memory_order_relaxed);
+    levelMul.store(modulation.levelMul, std::memory_order_relaxed);
+    sequence.store(2, std::memory_order_release);
+}
+
+void BassVoice::AtomicVoiceModulation::publish(const VoiceModulation& modulation) noexcept
+{
+    const auto start = sequence.load(std::memory_order_relaxed);
+    const auto odd = (start % 2u == 0u) ? start + 1u : start + 2u;
+    sequence.store(odd, std::memory_order_release);
+    cutoffMul.store(modulation.cutoffMul, std::memory_order_relaxed);
+    resonanceAdd.store(modulation.resonanceAdd, std::memory_order_relaxed);
+    panAdd.store(modulation.panAdd, std::memory_order_relaxed);
+    attackScale.store(modulation.attackScale, std::memory_order_relaxed);
+    decayScale.store(modulation.decayScale, std::memory_order_relaxed);
+    pitchSemi.store(modulation.pitchSemi, std::memory_order_relaxed);
+    levelMul.store(modulation.levelMul, std::memory_order_relaxed);
+    sequence.store(odd + 1u, std::memory_order_release);
+}
+
+bool BassVoice::AtomicVoiceModulation::tryRead(VoiceModulation& modulation) const noexcept
+{
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        const auto before = sequence.load(std::memory_order_acquire);
+        if ((before & 1u) != 0u)
+            continue;
+
+        VoiceModulation snapshot;
+        snapshot.cutoffMul = cutoffMul.load(std::memory_order_relaxed);
+        snapshot.resonanceAdd = resonanceAdd.load(std::memory_order_relaxed);
+        snapshot.panAdd = panAdd.load(std::memory_order_relaxed);
+        snapshot.attackScale = attackScale.load(std::memory_order_relaxed);
+        snapshot.decayScale = decayScale.load(std::memory_order_relaxed);
+        snapshot.pitchSemi = pitchSemi.load(std::memory_order_relaxed);
+        snapshot.levelMul = levelMul.load(std::memory_order_relaxed);
+
+        const auto after = sequence.load(std::memory_order_acquire);
+        if (before == after && (after & 1u) == 0u)
+        {
+            modulation = snapshot;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+float BassVoice::coeffToTarget(const float seconds, const double sampleRate, const float target) noexcept
+{
+    const float safeSamples = std::max(1.0f, std::max(0.0001f, seconds) * static_cast<float>(std::max(1.0, sampleRate)));
+    const float safeTarget = std::clamp(target, 0.000001f, 0.999999f);
+    return std::exp(std::log(safeTarget) / safeSamples);
+}
+
+void BassVoice::seedRandomState(const int note, const float velocity) noexcept
+{
+    uint32_t seed = 0xA511E9B3u;
+    seed ^= static_cast<uint32_t>(note + 128) * 0x45D9F3Bu;
+    seed ^= static_cast<uint32_t>(std::round(std::clamp(velocity, 0.0f, 1.0f) * 65535.0f)) * 0x119DE1F3u;
+    seed ^= static_cast<uint32_t>(chars.numOscillators + 17) * 0x3449D5D1u;
+    seed ^= static_cast<uint32_t>(chars.numPartials + 29) * 0x27D4EB2Du;
+    seed ^= static_cast<uint32_t>(chars.oscMode) * 0x165667B1u;
+    seed ^= static_cast<uint32_t>(std::round(settings.character * 1024.0f)) * 0x9E3779B9u;
+    seed ^= seed >> 16;
+    seed *= 0x7FEB352Du;
+    seed ^= seed >> 15;
+    seed *= 0x846CA68Bu;
+    seed ^= seed >> 16;
+    rngState = seed != 0u ? seed : 0x6D2B79F5u;
+}
+
+float BassVoice::nextRandomFloat() noexcept
+{
+    uint32_t x = rngState != 0u ? rngState : 0x6D2B79F5u;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    rngState = x != 0u ? x : 0x6D2B79F5u;
+    return static_cast<float>(rngState >> 8) * (1.0f / 16777216.0f);
+}
+
+float BassVoice::nextRandomBipolar() noexcept
+{
+    return nextRandomFloat() * 2.0f - 1.0f;
+}
+
+float BassVoice::tanhAntiderivative(const float x) noexcept
+{
+    constexpr float logTwo = 0.6931471805599453f;
+    const float ax = std::abs(x);
+    if (ax > 12.0f)
+        return ax - logTwo;
+
+    return std::log(std::cosh(x));
+}
+
+float BassVoice::adaaTanh(const float x, const float previousX) noexcept
+{
+    const float delta = x - previousX;
+    if (std::abs(delta) < 1.0e-5f)
+        return std::tanh(0.5f * (x + previousX));
+
+    const float y = (tanhAntiderivative(x) - tanhAntiderivative(previousX)) / delta;
+    return std::isfinite(y) ? juce::jlimit(-1.0f, 1.0f, y) : std::tanh(x);
+}
+
 void BassVoice::updateEnvelopeCoefficients(float sampleRate) noexcept
 {
     const float fsr = std::max(1.0f, sampleRate);
@@ -60,12 +197,27 @@ float BassVoice::computeDetuneBlend() const noexcept
 
 void BassVoice::setVoiceModulation(const VoiceModulation& modulation, double sampleRate) noexcept
 {
+    juce::ignoreUnused(sampleRate);
+    pendingModulation.publish(modulation);
+}
+
+void BassVoice::applyVoiceModulation(const VoiceModulation& modulation, float sampleRate) noexcept
+{
     currentModulation = modulation;
     modPitchFactor = std::exp2(modulation.pitchSemi / 12.0f);
     settings.level = juce::jlimit(0.0f, 4.0f, baseLevel * std::clamp(modulation.levelMul, 0.0f, 4.0f));
-    updateEnvelopeCoefficients(static_cast<float>(sampleRate));
+    updateEnvelopeCoefficients(sampleRate);
     updatePanFromModulation();
     updateResonanceResponse();
+}
+
+void BassVoice::consumePendingModulation(float sampleRate) noexcept
+{
+    VoiceModulation modulation;
+    if (!pendingModulation.tryRead(modulation))
+        return;
+
+    applyVoiceModulation(modulation, sampleRate);
 }
 
 // =========================================================================
@@ -96,6 +248,14 @@ float BassVoice::readComb(const float* buf, const int bufSize,
     const int   idx0 = static_cast<int>(std::floor(readPos));
     const float frac = readPos - static_cast<float>(idx0);
 
+    if (bufSize == kBodyBufSize)
+    {
+        constexpr int mask = kBodyBufSize - 1;
+        const float s0 = buf[idx0 & mask];
+        const float s1 = buf[(idx0 + 1) & mask];
+        return s0 + frac * (s1 - s0);
+    }
+
     auto wrap = [bufSize](int i) -> int {
         return ((i % bufSize) + bufSize) % bufSize;
     };
@@ -121,6 +281,7 @@ void BassVoice::noteOn(const BassSettings& s,
     midiNote = note;
     ageSamples = 0;
     currentModulation = {};
+    pendingModulation.reset(currentModulation);
     modPitchFactor = 1.0f;
     quickReleaseForced = false;
     // FIX: Guard attack to prevent click with random oscillator phases on unison
@@ -131,6 +292,7 @@ void BassVoice::noteOn(const BassSettings& s,
     baseLevel = settings.level;
 
     const auto fsr = static_cast<float>(sr);
+    seedRandomState(note, vel);
 
     // ----- Base frequency with tuning -----
     baseFreq = 440.0f * std::pow(2.0f,
@@ -154,9 +316,10 @@ void BassVoice::noteOn(const BassSettings& s,
             for (int n = 0; n < np; ++n)
             {
                 const int harmonic = n + 1;
-                const float fn = static_cast<float>(harmonic) * baseFreq *
+                const float freqRatio = static_cast<float>(harmonic) *
                     std::sqrt(1.0f + chars.inharmonicity *
                               static_cast<float>(harmonic * harmonic));
+                const float fn = baseFreq * freqRatio;
 
                 if (fn >= fsr * 0.48f)
                 {
@@ -180,6 +343,7 @@ void BassVoice::noteOn(const BassSettings& s,
                 auto& p = partials[static_cast<std::size_t>(n)];
                 p.phase     = 0.0f;
                 p.phaseInc  = fn / fsr;
+                p.freqRatio = freqRatio;
                 p.amplitude = amp;
                 p.decayCoeff = std::exp(-1.0f / (dTime * fsr));
             }
@@ -197,14 +361,15 @@ void BassVoice::noteOn(const BassSettings& s,
             for (int o = 0; o < numOscs; ++o)
             {
                 auto& osc = oscs[static_cast<std::size_t>(o)];
-                osc.phase = (numOscs > 1) ? rng.nextFloat() : 0.0f;
+                osc.phase = (numOscs > 1) ? nextRandomFloat() : 0.0f;
 
                 float freqRatio = 1.0f;
                 if (numOscs == 2)
                     freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
                 else if (numOscs == 3)
-                    freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
+                    freqRatio = (o == 0) ? (1.0f / detuneRatio) : ((o == 2) ? detuneRatio : 1.0f);
 
+                osc.freqRatio = freqRatio;
                 osc.phaseInc = (baseFreq * freqRatio) / fsr;
             }
         }
@@ -310,6 +475,8 @@ void BassVoice::noteOn(const BassSettings& s,
     hpfState      = 0.0f;
     pluckLpState  = 0.0f;
     unisonLpState = 0.0f;
+    driveAdaaPreviousInput = 0.0f;
+    characterAdaaPreviousInput = 0.0f;
     // Reese (≥3 oscs): precompute 1-pole LP coeff at min(4000, cutoffHz × 1.4) Hz
     unisonLpCoeff = (numOscs >= 3)
         ? 1.0f - std::exp(-juce::MathConstants<float>::twoPi
@@ -345,8 +512,8 @@ void BassVoice::noteOn(const BassSettings& s,
     // ----- Max duration guard -----
     maxAgeSamples = static_cast<int>(sr * std::max(1.0f,
         settings.decaySeconds * 6.0f + settings.releaseSeconds * 3.0f));
-    if (maxAgeSamples > static_cast<int>(sr * 30.0))
-        maxAgeSamples = static_cast<int>(sr * 30.0);
+    if (maxAgeSamples > static_cast<int>(sr * 600.0))
+        maxAgeSamples = static_cast<int>(sr * 600.0);
 
     setVoiceModulation(currentModulation, sr);
 }
@@ -368,7 +535,7 @@ void BassVoice::forceQuickRelease() noexcept
         return;
     quickReleaseForced = true;
     envState = EnvState::Release;
-    releaseCoeff = std::exp(-1.0f / 64.0f);
+    releaseCoeff = coeffToTarget(0.005f, sr, 0.001f);
 }
 
 void BassVoice::forceReleaseSeconds(float seconds) noexcept
@@ -391,6 +558,8 @@ void BassVoice::forceStop() noexcept
     pitchEnvLevel = 0.0f;
     glideActive = false;
     quickReleaseForced = false;
+    driveAdaaPreviousInput = 0.0f;
+    characterAdaaPreviousInput = 0.0f;
 }
 
 // =========================================================================
@@ -404,7 +573,6 @@ void BassVoice::glideToNote(int note, float glideTimeSec)
 
     if (glideTimeSec > 0.001f)
     {
-        const float glideTimeSamples = glideTimeSec * static_cast<float>(sr);
         // Exponential glide: ratio per sample to reach target
         const float ratio = targetFreq / std::max(0.01f, baseFreq);
         
@@ -457,7 +625,6 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
     if (settings.glideTime > 0.001f)
     {
         baseFreq = oldBaseFreq;
-        const float glideTimeSamples = settings.glideTime * fsr;
         const float ratio = targetFreq / std::max(0.01f, baseFreq);
         // FIX Phase 2.1: Same glide guard as glideToNote()
         const float maxGlideRatio = 2.0f;
@@ -499,7 +666,8 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
             if (numOscs == 2)
                 freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
             else if (numOscs == 3)
-                freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
+                freqRatio = (o == 0) ? (1.0f / detuneRatio) : ((o == 2) ? detuneRatio : 1.0f);
+            oscs[static_cast<std::size_t>(o)].freqRatio = freqRatio;
             oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq * freqRatio) / fsr;
         }
     }
@@ -507,8 +675,8 @@ void BassVoice::retriggerWithGlide(const BassSettings& s,
 
     maxAgeSamples = static_cast<int>(sr * std::max(1.0f,
         settings.decaySeconds * 6.0f + settings.releaseSeconds * 3.0f));
-    if (maxAgeSamples > static_cast<int>(sr * 30.0))
-        maxAgeSamples = static_cast<int>(sr * 30.0);
+    if (maxAgeSamples > static_cast<int>(sr * 600.0))
+        maxAgeSamples = static_cast<int>(sr * 600.0);
 
     setVoiceModulation(currentModulation, sr);
 }
@@ -530,6 +698,8 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
 
     constexpr float twoPi = juce::MathConstants<float>::twoPi;
     juce::ignoreUnused(sr);
+    const float fsr = static_cast<float>(std::max(1.0, sr));
+    consumePendingModulation(fsr);
 
     auto* left  = buffer.getWritePointer(0);
     auto* right = numChannels > 1 ? buffer.getWritePointer(1) : nullptr;
@@ -559,20 +729,12 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
                 glideCoeff = 1.0f;
             }
             // Update phase increments for new frequency
-            const auto fsr = static_cast<float>(sr);
             if (chars.oscMode != OscMode::Additive)
             {
-                // FIX: Use same cents-based detune as noteOn for consistency
-                const float detuneCents = chars.detuneAmount * 100.0f * computeDetuneBlend();
-                const float detuneRatio = std::pow(2.0f, detuneCents / 1200.0f);
                 for (int o = 0; o < numOscs; ++o)
                 {
-                    float freqRatio = 1.0f;
-                    if (numOscs == 2)
-                        freqRatio = (o == 0) ? (2.0f / detuneRatio) : detuneRatio;
-                    else if (numOscs == 3)
-                        freqRatio = std::pow(detuneRatio, static_cast<float>(o - 1));
-                    oscs[static_cast<std::size_t>(o)].phaseInc = (baseFreq * freqRatio) / fsr;
+                    auto& osc = oscs[static_cast<std::size_t>(o)];
+                    osc.phaseInc = (baseFreq * osc.freqRatio) / fsr;
                 }
             }
             else
@@ -580,11 +742,8 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
                 // For additive, update fundamental partials proportionally
                 for (int n = 0; n < numActivePartials; ++n)
                 {
-                    const int harmonic = n + 1;
-                    const float fn = static_cast<float>(harmonic) * baseFreq *
-                        std::sqrt(1.0f + chars.inharmonicity *
-                                  static_cast<float>(harmonic * harmonic));
-                    partials[static_cast<std::size_t>(n)].phaseInc = fn / fsr;
+                    auto& partial = partials[static_cast<std::size_t>(n)];
+                    partial.phaseInc = (baseFreq * partial.freqRatio) / fsr;
                 }
             }
             subPhaseInc = (baseFreq * 0.5f) / static_cast<float>(sr);
@@ -755,7 +914,7 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
         // ---- Pluck transient (noise burst) ----
         if (pluckLevel > 0.001f)
         {
-            const float noise = rng.nextFloat() * 2.0f - 1.0f;
+            const float noise = nextRandomBipolar();
             // Slap (pluckAmount ≥ 0.75): 1-pole LP ~8 kHz softens pluck HF before hi-hats collide
             pluckLpState += 0.68f * (noise - pluckLpState);
             const float pluckNoise = (chars.pluckAmount >= 0.75f) ? pluckLpState : noise;
@@ -770,7 +929,7 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
                                            bodyWritePos, bodyDelaySamples);
             bodyDampState += chars.bodyDamping * 0.4f * (delayed - bodyDampState);
             bodyBuf[bodyWritePos] = signal * 0.3f + bodyDampState * bodyFeedback;
-            bodyWritePos = (bodyWritePos + 1) % kBodyBufSize;
+            bodyWritePos = (bodyWritePos + 1) & (kBodyBufSize - 1);
             signal += delayed * settings.body * 0.4f;
         }
 
@@ -783,17 +942,39 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
             const float envModF = juce::jmin(
                 filterBaseF * cutoffMod * filterEnvMul * lfoMod,
                 filterMaxF);
+            const float stage2MaxF = filterMaxF * ((filter24dB && filterQinv < 0.18f) ? 0.82f : 0.90f);
+            const float envModF2 = juce::jmin(envModF, stage2MaxF);
             const float hp = signal - svfLow - filterQinv * svfBand;
             svfBand += envModF * hp;
             svfLow  += envModF * svfBand;
+            if (!std::isfinite(svfLow) || !std::isfinite(svfBand))
+            {
+                svfLow = 0.0f;
+                svfBand = 0.0f;
+            }
+            else
+            {
+                svfLow = juce::jlimit(-8.0f, 8.0f, svfLow);
+                svfBand = juce::jlimit(-8.0f, 8.0f, svfBand);
+            }
             signal = svfLow;
 
             // Second stage for 24dB/oct (cascaded SVF)
             if (filter24dB)
             {
                 const float hp2 = signal - svfLow2 - filterQinv * svfBand2;
-                svfBand2 += envModF * hp2;
-                svfLow2  += envModF * svfBand2;
+                svfBand2 += envModF2 * hp2;
+                svfLow2  += envModF2 * svfBand2;
+                if (!std::isfinite(svfLow2) || !std::isfinite(svfBand2))
+                {
+                    svfLow2 = 0.0f;
+                    svfBand2 = 0.0f;
+                }
+                else
+                {
+                    svfLow2 = juce::jlimit(-8.0f, 8.0f, svfLow2);
+                    svfBand2 = juce::jlimit(-8.0f, 8.0f, svfBand2);
+                }
                 signal = svfLow2;
             }
         }
@@ -805,7 +986,9 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
             if (totalDrive > 0.01f)
             {
                 const float drv = 1.0f + totalDrive;
-                signal = std::tanh(signal * drv) / std::max(0.01f, std::tanh(drv));
+                const float driveInput = signal * drv;
+                signal = adaaTanh(driveInput, driveAdaaPreviousInput) / std::max(0.01f, std::tanh(drv));
+                driveAdaaPreviousInput = driveInput;
             }
         }
 
@@ -822,7 +1005,9 @@ void BassVoice::render(juce::AudioBuffer<float>& buffer,
             // Acoustic (Additive): warmth/growl at 0.12 — more harmonic body
             // Synth (Saw/Square): slightly lighter (0.09) — avoids distortion on already-rich oscillators
             const float charScale = (chars.oscMode == OscMode::Additive) ? 0.12f : 0.09f;
-            signal += std::tanh(signal * 2.0f) * (settings.character * charScale);
+            const float characterInput = signal * 2.0f;
+            signal += adaaTanh(characterInput, characterAdaaPreviousInput) * (settings.character * charScale);
+            characterAdaaPreviousInput = characterInput;
         }
 
         // ---- Apply envelope, velocity, level ----

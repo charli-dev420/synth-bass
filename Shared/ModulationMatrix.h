@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 
 // =============================================================================
 // ModulationMatrix — configurable source→destination modulation routing.
@@ -215,20 +217,14 @@ public:
     {
         const auto safeIndex = static_cast<std::size_t>(juce::jlimit(0, kMaxSlots - 1, index));
         const auto& slot = slots[safeIndex];
-        return {
-            decodeSource(slot.source.load(std::memory_order_relaxed)),
-            decodeDestination(slot.destination.load(std::memory_order_relaxed)),
-            slot.amount.load(std::memory_order_relaxed)
-        };
+        return unpackSlot(slot.packed.load(std::memory_order_acquire));
     }
 
     void setSlot(int index, Source source, Destination destination, float amount) noexcept
     {
         const auto safeIndex = static_cast<std::size_t>(juce::jlimit(0, kMaxSlots - 1, index));
         auto& slot = slots[safeIndex];
-        slot.source.store(static_cast<int>(source), std::memory_order_relaxed);
-        slot.destination.store(static_cast<int>(destination), std::memory_order_relaxed);
-        slot.amount.store(juce::jlimit(-1.0f, 1.0f, amount), std::memory_order_relaxed);
+        slot.packed.store(packSlot(source, destination, amount), std::memory_order_release);
     }
 
     void clearSlots() noexcept
@@ -440,10 +436,42 @@ public:
 private:
     struct AtomicModSlot
     {
-        std::atomic<int> source { static_cast<int>(Source::None) };
-        std::atomic<int> destination { static_cast<int>(Destination::None) };
-        std::atomic<float> amount { 0.0f };
+        std::atomic<std::uint64_t> packed { 0 };
     };
+
+    static std::uint32_t floatToBits(float value) noexcept
+    {
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &value, sizeof(bits));
+        return bits;
+    }
+
+    static float bitsToFloat(std::uint32_t bits) noexcept
+    {
+        float value = 0.0f;
+        std::memcpy(&value, &bits, sizeof(value));
+        return std::isfinite(value) ? juce::jlimit(-1.0f, 1.0f, value) : 0.0f;
+    }
+
+    static std::uint64_t packSlot(Source source, Destination destination, float amount) noexcept
+    {
+        const auto safeSource = static_cast<std::uint64_t>(
+            juce::jlimit(0, kSourceCount - 1, static_cast<int>(source)));
+        const auto safeDestination = static_cast<std::uint64_t>(
+            juce::jlimit(0, kDestCount - 1, static_cast<int>(destination)));
+        const float safeAmount = std::isfinite(amount) ? juce::jlimit(-1.0f, 1.0f, amount) : 0.0f;
+        return safeSource
+             | (safeDestination << 8)
+             | (static_cast<std::uint64_t>(floatToBits(safeAmount)) << 16);
+    }
+
+    static ModSlot unpackSlot(std::uint64_t packed) noexcept
+    {
+        const auto rawSource = static_cast<int>(packed & 0xffu);
+        const auto rawDestination = static_cast<int>((packed >> 8) & 0xffu);
+        const auto amountBits = static_cast<std::uint32_t>((packed >> 16) & 0xffffffffu);
+        return { decodeSource(rawSource), decodeDestination(rawDestination), bitsToFloat(amountBits) };
+    }
 
     static Source decodeSource(int rawValue) noexcept
     {

@@ -6,11 +6,13 @@
 #include "../../Shared/PresetManifest.h"
 #include "../../Shared/ProductionQa.h"
 
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 
 namespace
 {
@@ -194,6 +196,18 @@ float maxWindowRmsDelta(const juce::AudioBuffer<float>& buffer, int startSample 
     return maxDelta;
 }
 
+float maxSampleStep(const juce::AudioBuffer<float>& buffer)
+{
+    float maxStep = 0.0f;
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        const auto* data = buffer.getReadPointer(ch);
+        for (int sample = 1; sample < buffer.getNumSamples(); ++sample)
+            maxStep = juce::jmax(maxStep, std::abs(data[sample] - data[sample - 1]));
+    }
+    return maxStep;
+}
+
 float channelRangePeak(const juce::AudioBuffer<float>& buffer, int startChannel, int endChannelExclusive)
 {
     float peak = 0.0f;
@@ -348,7 +362,7 @@ void requireCanonicalPresetXml(const juce::XmlElement& xml, bool expectFactoryIn
     for (const auto* attr : {
              "level", "tune", "brightness", "attack", "decay", "sustain", "release",
              "body", "drive", "pitch_env", "filter_env", "sub", "character", "cutoff", "pan",
-             "resonance", "glide_time", "output",
+             "resonance", "glide_time", "pitch_env_time", "snap", "env_shape", "output",
              "mono_mode", "lfo_rate", "lfo_depth", "lfo_wave", "lfo_dest",
              "macro_fatness", "macro_brillance", "macro_punch", "macro_depth",
              "mod_wheel_target", "pitch_bend_range",
@@ -389,6 +403,7 @@ std::unique_ptr<BassSynthAudioProcessor> makeProcessor()
 
 void testFactoryBankShape()
 {
+    constexpr int kExpectedPresetsPerBass = 10;
     const auto& banks = mbs::getFactoryPresetBanks();
     require(static_cast<int>(banks.size()) == mbs::kNumBasses, "Factory bank count mismatch");
 
@@ -396,19 +411,33 @@ void testFactoryBankShape()
     for (int bassIndex = 0; bassIndex < mbs::kNumBasses; ++bassIndex)
     {
         const auto& bank = banks[static_cast<std::size_t>(bassIndex)];
-        require(!bank.empty(), "Each bass must expose at least one factory preset");
+        require(static_cast<int>(bank.size()) == kExpectedPresetsPerBass,
+                "Each bass must expose two legacy presets plus eight curated8 presets");
         totalPresetCount += static_cast<int>(bank.size());
 
+        const auto instrumentName = juce::String(juce::CharPointer_UTF8(mbs::getBassName(bassIndex)));
+        require(juce::String(juce::CharPointer_UTF8(bank[0].name.c_str())) == instrumentName + " Reference",
+                "Factory preset A must use the canonical Reference name");
+        require(juce::String(juce::CharPointer_UTF8(bank[1].name.c_str())) == instrumentName + " Signature",
+                "Factory preset B must use the canonical Signature name");
+
+        int curated8Count = 0;
         for (const auto& preset : bank)
         {
             require(!preset.name.empty(), "Preset name cannot be empty");
+            require(std::abs(preset.settings.tuneSemitones) < 1.0e-6f, "Factory presets must keep tune=0");
             require(!preset.metadata.mixRole.empty(), "Preset mixRole metadata cannot be empty");
             require(!preset.metadata.familyLabel.empty(), "Preset family metadata cannot be empty");
             require(!preset.metadata.tags.empty(), "Preset tags metadata cannot be empty");
+            if (stringArrayContainsIgnoreCase(splitCsvTags(preset.metadata.tags), "curated8"))
+                ++curated8Count;
             require(preset.metadata.nominalPeakDb <= -1.0f && preset.metadata.nominalPeakDb >= -24.0f,
                     "Preset nominal peak metadata must stay in production-safe range");
             require(preset.outputBus >= 0 && preset.outputBus <= BassSynthAudioProcessor::kNumAuxOutputs,
                     "Preset output bus out of range");
+            require(!preset.fx.delayOn, "Factory presets must not rely on delay");
+            require(preset.fx.delayMix <= 1.0e-6f, "Factory presets must keep delay mix muted");
+            require(preset.fx.delayFeedback <= 1.0e-6f, "Factory presets must keep delay feedback muted");
 
             const auto availability = mbs::getFxAvailability(bassIndex);
             require(!preset.fx.saturatorOn || availability.saturator, "Unavailable saturator leaked into factory bank");
@@ -420,12 +449,13 @@ void testFactoryBankShape()
             require(!preset.fx.reverbOn || availability.reverb, "Unavailable reverb leaked into factory bank");
             require(!preset.fx.limiterOn || availability.limiter, "Unavailable limiter leaked into factory bank");
         }
+        require(curated8Count == 8, "Each bass bank must include exactly eight imported curated8 presets");
     }
 
     require(totalPresetCount == static_cast<int>(mbs::getTotalFactoryPresetCount()),
             "Factory preset total must stay derived from the canonical bank definition");
-    require(totalPresetCount >= mbs::kNumBasses * 20,
-            "Factory bank coverage is unexpectedly low");
+    require(totalPresetCount == mbs::kNumBasses * kExpectedPresetsPerBass,
+            "Factory preset count must include the curated8 import for every bass");
 }
 
 void testBootPresetMatchesFactory()
@@ -1113,7 +1143,7 @@ void testVoiceStealStressRendersCleanly()
     processor->enableAllBuses();
     processor->prepareToPlay(48000.0, 256);
     setParameterValue(processor->getAPVTS(), "selected_bass", 8.0f);
-    processor->applyFactoryPreset(2);
+    processor->applyFactoryPreset(1);
 
     std::vector<std::pair<int, juce::MidiMessage>> events;
     for (int i = 0; i < 36; ++i)
@@ -1127,6 +1157,532 @@ void testVoiceStealStressRendersCleanly()
     require(bufferIsFinite(rendered), "Voice steal stress render must stay finite");
 }
 
+void testP0BassVoicePrngRenderIsDeterministic()
+{
+    constexpr int kBassIndex = 2; // Slap has a strong pluck transient.
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.snap = 1.0f;
+    settings.brightness = 0.8f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    const auto first = renderBassVoice(settings, chars, 43, 0.87f, 48000.0, 8192);
+    const auto second = renderBassVoice(settings, chars, 43, 0.87f, 48000.0, 8192);
+
+    require(bufferIsFinite(first) && bufferIsFinite(second), "P0 deterministic PRNG renders must stay finite");
+    require(bufferPeak(first) > musique::qa::minimumAudiblePeakLinear(),
+            "P0 deterministic PRNG render must remain audible");
+    require(bufferDifference(first, second) < 1.0e-6f,
+            "P0 BassVoice PRNG must produce deterministic repeated pluck renders");
+}
+
+void testP0BassVoiceConcurrentModulationSnapshot()
+{
+    constexpr int kBassIndex = 6; // Synth bass exercises cutoff/resonance modulation.
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.sustainLevel = 1.0f;
+    settings.decaySeconds = 8.0f;
+    settings.releaseSeconds = 2.0f;
+    settings.level = 0.65f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    mbs::BassVoice voice;
+    voice.noteOn(settings, chars, 40, 0.92f, 48000.0);
+
+    std::atomic<bool> running { true };
+    std::thread modThread([&voice, &running]()
+    {
+        for (int i = 0; running.load(std::memory_order_acquire) && i < 20000; ++i)
+        {
+            mbs::VoiceModulation modulation;
+            modulation.cutoffMul = (i & 1) ? 0.25f : 8.0f;
+            modulation.resonanceAdd = (i % 5 == 0) ? 0.75f : -0.35f;
+            modulation.panAdd = (i % 7 == 0) ? -0.45f : 0.45f;
+            modulation.attackScale = (i & 2) ? 0.5f : 2.0f;
+            modulation.decayScale = (i & 4) ? 0.5f : 1.5f;
+            modulation.pitchSemi = (i % 11 == 0) ? 0.18f : -0.12f;
+            modulation.levelMul = (i & 8) ? 0.65f : 1.25f;
+            voice.setVoiceModulation(modulation, 48000.0);
+        }
+    });
+
+    juce::AudioBuffer<float> block(2, 64);
+    bool allBlocksFinite = true;
+    float maxPeak = 0.0f;
+    for (int blockIndex = 0; blockIndex < 512; ++blockIndex)
+    {
+        block.clear();
+        voice.render(block, 0, block.getNumSamples());
+        allBlocksFinite = allBlocksFinite && bufferIsFinite(block);
+        maxPeak = juce::jmax(maxPeak, bufferPeak(block));
+    }
+
+    running.store(false, std::memory_order_release);
+    modThread.join();
+
+    require(allBlocksFinite, "P0 concurrent BassVoice modulation render must stay finite");
+    require(maxPeak <= musique::qa::maximumSafePeakLinear(),
+            "P0 concurrent BassVoice modulation render must stay below QA ceiling");
+}
+
+void testP0QuickReleaseReachesMinus60DbInFiveMs()
+{
+    constexpr int kBassIndex = 0;
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.sustainLevel = 1.0f;
+    settings.releaseSeconds = 4.0f;
+    settings.level = 0.55f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    for (const double sampleRate : { 44100.0, 96000.0, 192000.0 })
+    {
+        mbs::BassVoice voice;
+        voice.noteOn(settings, chars, 36, 0.9f, sampleRate);
+
+        juce::AudioBuffer<float> warmup(2, 512);
+        warmup.clear();
+        voice.render(warmup, 0, warmup.getNumSamples());
+        const float startLevel = voice.getEnvelopeLevel();
+        require(startLevel > 0.01f, "P0 quick release fixture must start from an audible envelope level");
+
+        const int releaseSamples = static_cast<int>(std::ceil(sampleRate * 0.005));
+        juce::AudioBuffer<float> release(2, releaseSamples + 8);
+        release.clear();
+        voice.forceQuickRelease();
+        voice.render(release, 0, release.getNumSamples());
+
+        require(bufferIsFinite(release), "P0 quick release render must stay finite");
+        require(voice.getEnvelopeLevel() <= startLevel * 0.0015f + 1.0e-6f,
+                "P0 quick release must reach roughly -60 dB after 5 ms");
+        require(bufferPeak(release) <= musique::qa::maximumSafePeakLinear(),
+                "P0 quick release must not create a burst");
+        require(maxSampleStep(release) < 0.95f,
+                "P0 quick release must avoid destructive sample discontinuities");
+    }
+}
+
+void testP0VoiceStealQuickReleaseAcrossSampleRates()
+{
+    for (const double sampleRate : { 44100.0, 192000.0 })
+    {
+        auto processor = makeProcessor();
+        processor->enableAllBuses();
+        processor->prepareToPlay(sampleRate, 64);
+        setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+        processor->applyFactoryPreset(0);
+        setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "output"), 0.0f);
+        setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "level"), 0.35f);
+        setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+        std::vector<std::pair<int, juce::MidiMessage>> events;
+        events.reserve(144);
+        for (int i = 0; i < 96; ++i)
+            events.push_back({ i * 2, juce::MidiMessage::noteOn(1, 28 + (i % 48), (juce::uint8) 56) });
+        for (int i = 0; i < 96; ++i)
+            events.push_back({ 2048 + i, juce::MidiMessage::noteOff(1, 28 + (i % 48)) });
+
+        const auto rendered = renderWithMidi(*processor, events, 4096, 512);
+        const auto peak = channelRangePeak(rendered, 0, 2);
+        const auto peakDb = musique::qa::peakToDb(peak);
+        require(bufferIsFinite(rendered), "P0 voice-steal quick release render must stay finite");
+        require(peak > musique::qa::minimumAudiblePeakLinear(),
+                "P0 voice-steal quick release render must remain audible");
+        require(peak <= musique::qa::maximumSafePeakLinear(),
+                "P0 voice-steal quick release render must stay below QA ceiling at "
+                    + juce::String(sampleRate, 0) + " Hz, peak " + juce::String(peakDb, 2) + " dBFS");
+        const auto step = maxSampleStep(rendered);
+        require(step < 0.95f,
+                "P0 voice-steal quick release must avoid destructive sample discontinuities at "
+                    + juce::String(sampleRate, 0) + " Hz, max step " + juce::String(step, 3));
+    }
+}
+
+
+void testP0VoiceStealDoesNotMoveBassVoiceObjects()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 64);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 7.0f);
+    processor->applyFactoryPreset(70);
+    setParameterValue(processor->getAPVTS(), "mono_mode", 0.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(7, "output"), 0.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(7, "level"), 0.22f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(7, "release"), 3.5f);
+    setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+    std::vector<std::pair<int, juce::MidiMessage>> events;
+    events.reserve(224);
+    for (int i = 0; i < 112; ++i)
+        events.push_back({ i * 2, juce::MidiMessage::noteOn(1, 28 + (i % 48), (juce::uint8) 72) });
+    for (int i = 0; i < 112; ++i)
+        events.push_back({ 4096 + i, juce::MidiMessage::noteOff(1, 28 + (i % 48)) });
+
+    const auto rendered = renderWithMidi(*processor, events, 8192, 128);
+    const auto peak = channelRangePeak(rendered, 0, 2);
+    require(bufferIsFinite(rendered), "P0 pointer-pool dense voice stealing must stay finite");
+    require(peak > musique::qa::minimumAudiblePeakLinear(),
+            "P0 pointer-pool dense voice stealing must remain audible");
+    require(peak <= musique::qa::maximumSafePeakLinear(),
+            "P0 pointer-pool dense voice stealing must stay below QA ceiling");
+    require(maxSampleStep(rendered) < 0.95f,
+            "P0 pointer-pool dense voice stealing must avoid destructive discontinuities");
+}
+
+void testP0DyingPoolEvictionReusesPointersSafely()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 64);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "mono_mode", 0.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "level"), 0.28f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "release"), 3.5f);
+    setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+    juce::AudioBuffer<float> block(processor->getTotalNumOutputChannels(), 64);
+    float maxPeak = 0.0f;
+    bool allFinite = true;
+
+    for (int blockIndex = 0; blockIndex < 12; ++blockIndex)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        for (int i = 0; i < 12; ++i)
+        {
+            const int note = 28 + ((blockIndex * 12 + i) % 48);
+            midi.addEvent(juce::MidiMessage::noteOn(1, note, (juce::uint8) 68), i * 4);
+        }
+        processor->processBlock(block, midi);
+        allFinite = allFinite && bufferIsFinite(block);
+        maxPeak = juce::jmax(maxPeak, channelRangePeak(block, 0, 2));
+    }
+
+    block.clear();
+    juce::MidiBuffer panicMidi;
+    panicMidi.addEvent(juce::MidiMessage::controllerEvent(1, 120, 0), 0);
+    processor->processBlock(block, panicMidi);
+    allFinite = allFinite && bufferIsFinite(block);
+    maxPeak = juce::jmax(maxPeak, channelRangePeak(block, 0, 2));
+
+    require(allFinite, "P0 dying-pool pointer eviction must stay finite");
+    require(maxPeak > musique::qa::minimumAudiblePeakLinear(),
+            "P0 dying-pool pointer eviction fixture must render audible signal before panic");
+    require(maxPeak <= musique::qa::maximumSafePeakLinear(),
+            "P0 dying-pool pointer eviction must stay below QA ceiling");
+    require(processor->getActiveVoiceCount() == 0,
+            "P0 dying-pool pointer eviction must leave no active voices after All Sound Off");
+}
+
+void testPhaseCReleaseVoicesReleasesDyingTails()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 64);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "mono_mode", 0.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "level"), 0.24f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "release"), 3.0f);
+    setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+    juce::AudioBuffer<float> block(processor->getTotalNumOutputChannels(), 64);
+    float preReleasePeak = 0.0f;
+    for (int blockIndex = 0; blockIndex < 10; ++blockIndex)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        for (int i = 0; i < 10; ++i)
+            midi.addEvent(juce::MidiMessage::noteOn(1, 28 + ((blockIndex * 10 + i) % 48), static_cast<juce::uint8>(76)), i * 5);
+        processor->processBlock(block, midi);
+        require(bufferIsFinite(block), "Phase C Bass dying setup must stay finite");
+        preReleasePeak = juce::jmax(preReleasePeak, channelRangePeak(block, 0, 2));
+    }
+
+    block.clear();
+    juce::MidiBuffer allNotesOff;
+    allNotesOff.addEvent(juce::MidiMessage::allNotesOff(1), 0);
+    processor->processBlock(block, allNotesOff);
+    require(bufferIsFinite(block), "Phase C Bass All Notes Off block must stay finite");
+
+    float firstTailPeak = 0.0f;
+    float lastTailPeak = 0.0f;
+    for (int blockIndex = 0; blockIndex < 24; ++blockIndex)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        processor->processBlock(block, midi);
+        require(bufferIsFinite(block), "Phase C Bass dying release tail must stay finite");
+        const float peak = channelRangePeak(block, 0, 2);
+        if (blockIndex < 4)
+            firstTailPeak = juce::jmax(firstTailPeak, peak);
+        if (blockIndex >= 20)
+            lastTailPeak = juce::jmax(lastTailPeak, peak);
+    }
+
+    require(preReleasePeak > musique::qa::minimumAudiblePeakLinear(),
+            "Phase C Bass dying setup must be audible before All Notes Off");
+    require(firstTailPeak <= musique::qa::maximumSafePeakLinear(),
+            "Phase C Bass dying release tail must stay below QA ceiling");
+    require(lastTailPeak <= firstTailPeak + 1.0e-4f,
+            "Phase C Bass dying release tail must not grow after All Notes Off");
+}
+
+void testPhaseCPanicClearsActiveAndDyingVoices()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 64);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "mono_mode", 0.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "level"), 0.24f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "release"), 3.0f);
+    setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+    juce::AudioBuffer<float> block(processor->getTotalNumOutputChannels(), 64);
+    for (int blockIndex = 0; blockIndex < 10; ++blockIndex)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        for (int i = 0; i < 10; ++i)
+            midi.addEvent(juce::MidiMessage::noteOn(1, 28 + ((blockIndex * 10 + i) % 48), static_cast<juce::uint8>(76)), i * 5);
+        processor->processBlock(block, midi);
+        require(bufferIsFinite(block), "Phase C Bass panic setup must stay finite");
+    }
+
+    block.clear();
+    juce::MidiBuffer panic;
+    panic.addEvent(juce::MidiMessage::controllerEvent(1, 120, 0), 0);
+    processor->processBlock(block, panic);
+    require(bufferIsFinite(block), "Phase C Bass panic block must stay finite");
+    require(processor->getActiveVoiceCount() == 0, "Phase C Bass panic must clear active voices");
+
+    float postPanicPeak = channelRangePeak(block, 0, 2);
+    for (int blockIndex = 0; blockIndex < 8; ++blockIndex)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        processor->processBlock(block, midi);
+        require(bufferIsFinite(block), "Phase C Bass post-panic tail must stay finite");
+        postPanicPeak = juce::jmax(postPanicPeak, channelRangePeak(block, 0, 2));
+    }
+
+    require(postPanicPeak <= musique::qa::minimumAudiblePeakLinear(),
+            "Phase C Bass panic must leave no audible active or dying tail");
+}
+void testP0MonoLegatoUnaffectedByPointerPool()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 128);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 6.0f);
+    processor->applyFactoryPreset(60);
+    setParameterValue(processor->getAPVTS(), "mono_mode", 2.0f);
+    setParameterValue(processor->getAPVTS(), "glide_time", 0.28f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(6, "level"), 0.24f);
+    setParameterValue(processor->getAPVTS(), "output_gain", -16.0f);
+
+    const std::vector<std::pair<int, juce::MidiMessage>> events {
+        { 0, juce::MidiMessage::noteOn(1, 36, (juce::uint8) 94) },
+        { 2400, juce::MidiMessage::noteOn(1, 48, (juce::uint8) 90) },
+        { 7200, juce::MidiMessage::noteOn(1, 31, (juce::uint8) 88) },
+        { 12000, juce::MidiMessage::noteOff(1, 31) },
+        { 14400, juce::MidiMessage::noteOff(1, 48) },
+        { 16800, juce::MidiMessage::noteOff(1, 36) }
+    };
+
+    const auto rendered = renderWithMidi(*processor, events, 22000, 128);
+    const auto peak = channelRangePeak(rendered, 0, 2);
+    require(bufferIsFinite(rendered), "P0 mono legato pointer-pool render must stay finite");
+    require(peak > musique::qa::minimumAudiblePeakLinear(),
+            "P0 mono legato pointer-pool render must remain audible");
+    require(peak <= musique::qa::maximumSafePeakLinear(),
+            "P0 mono legato pointer-pool render must stay below QA ceiling");
+    require(maxSampleStep(rendered) < 0.95f,
+            "P0 mono legato pointer-pool render must avoid destructive discontinuities");
+}
+
+
+// BASS-P1-00 reclassification:
+// - active/fixed here: voice tanh aliasing, per-sample glide pow/sqrt, body comb modulo, SVF 24dB high-Q guard.
+// - already corrected/locked by scan: processBlock allocation risk when setSize/makeCopyOf/push_back remain outside the render path.
+// - out of scope for P1: P2 delay-line modulo, sample-rate-normalized pluck LP, preset redesign.
+void testP1HighDriveSynthVoicesStayBounded()
+{
+    for (const int bassIndex : { 3, 6, 7 })
+    {
+        auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(bassIndex)][0].settings;
+        settings.drive = 1.0f;
+        settings.character = 1.0f;
+        settings.level = 0.22f;
+        settings.subLevel = 0.15f;
+        settings.cutoffHz = 12000.0f;
+        settings.resonance = 0.65f;
+        settings.sustainLevel = 0.85f;
+        settings.decaySeconds = 2.0f;
+        const auto& chars = mbs::getCharacteristics(bassIndex);
+
+        const auto rendered = renderBassVoice(settings, chars, 76, 0.82f, 48000.0, 12000);
+        const auto peak = bufferPeak(rendered);
+        require(bufferIsFinite(rendered), "P1 high-drive voice render must stay finite for bass " + juce::String(bassIndex));
+        require(peak > musique::qa::minimumAudiblePeakLinear(),
+                "P1 high-drive voice render must remain audible for bass " + juce::String(bassIndex));
+        require(peak <= musique::qa::maximumSafePeakLinear(),
+                "P1 high-drive voice render must stay below QA ceiling for bass " + juce::String(bassIndex));
+        require(maxSampleStep(rendered) < 0.95f,
+                "P1 high-drive voice render must avoid destructive sample steps for bass " + juce::String(bassIndex));
+    }
+}
+
+void testP1MonoLegatoGlideUpDownStable()
+{
+    constexpr int kBassIndex = 6;
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.subLevel = 0.0f;
+    settings.drive = 0.1f;
+    settings.character = 0.2f;
+    settings.level = 0.35f;
+    settings.filterEnv = 0.0f;
+    settings.cutoffHz = 7000.0f;
+    settings.resonance = 0.15f;
+    settings.attackSeconds = 0.005f;
+    settings.decaySeconds = 6.0f;
+    settings.sustainLevel = 1.0f;
+    settings.glideTime = 0.45f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    auto renderGlide = [&](int startNote, int targetNote)
+    {
+        constexpr double sampleRate = 48000.0;
+        constexpr int totalSamples = 48000;
+        constexpr int glideStart = 12000;
+
+        mbs::BassVoice voice;
+        juce::AudioBuffer<float> buffer(2, totalSamples);
+        buffer.clear();
+        voice.noteOn(settings, chars, startNote, 0.86f, sampleRate);
+        voice.render(buffer, 0, glideStart);
+        voice.glideToNote(targetNote, settings.glideTime);
+        voice.render(buffer, glideStart, totalSamples - glideStart);
+        return buffer;
+    };
+
+    const auto upward = renderGlide(40, 52);
+    const auto downward = renderGlide(52, 40);
+    const double upFinal = estimateDominantAutocorrelationFrequency(upward, 48000.0, 40000, 4096, 50.0, 300.0);
+    const double downFinal = estimateDominantAutocorrelationFrequency(downward, 48000.0, 40000, 4096, 35.0, 220.0);
+
+    require(bufferIsFinite(upward) && bufferIsFinite(downward), "P1 mono legato glide renders must stay finite");
+    require(bufferPeak(upward) > musique::qa::minimumAudiblePeakLinear()
+                && bufferPeak(downward) > musique::qa::minimumAudiblePeakLinear(),
+            "P1 mono legato glide renders must remain audible");
+    require(bufferPeak(upward) <= musique::qa::maximumSafePeakLinear()
+                && bufferPeak(downward) <= musique::qa::maximumSafePeakLinear(),
+            "P1 mono legato glide renders must stay below QA ceiling");
+    require(maxSampleStep(upward) < 0.95f && maxSampleStep(downward) < 0.95f,
+            "P1 mono legato glide must avoid destructive sample steps");
+    require(upFinal > downFinal * 1.35,
+            "P1 mono legato glide final pitch must track direction, up="
+                + juce::String(upFinal, 2) + " Hz down=" + juce::String(downFinal, 2) + " Hz");
+}
+
+void testP1Synth24DbFilterExtremesStayFinite()
+{
+    constexpr int kBassIndex = 7;
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.level = 0.18f;
+    settings.subLevel = 0.0f;
+    settings.drive = 0.65f;
+    settings.character = 0.75f;
+    settings.cutoffHz = 18000.0f;
+    settings.resonance = 1.0f;
+    settings.filterEnv = 1.0f;
+    settings.brightness = 1.0f;
+    settings.decaySeconds = 5.0f;
+    settings.sustainLevel = 1.0f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    mbs::BassVoice voice;
+    voice.noteOn(settings, chars, 64, 0.9f, 48000.0);
+    voice.setLfoCutoffMod(1.0f);
+    mbs::VoiceModulation modulation;
+    modulation.cutoffMul = 16.0f;
+    modulation.resonanceAdd = 0.75f;
+    modulation.levelMul = 1.0f;
+    voice.setVoiceModulation(modulation, 48000.0);
+
+    juce::AudioBuffer<float> rendered(2, 24000);
+    rendered.clear();
+    voice.render(rendered, 0, rendered.getNumSamples());
+
+    require(bufferIsFinite(rendered), "P1 24dB SVF extreme render must stay finite");
+    require(bufferPeak(rendered) > musique::qa::minimumAudiblePeakLinear(),
+            "P1 24dB SVF extreme render must remain audible");
+    require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(),
+            "P1 24dB SVF extreme render must stay below QA ceiling");
+    require(maxSampleStep(rendered) < 0.95f,
+            "P1 24dB SVF extreme render must avoid destructive sample steps");
+}
+
+void testP1AcousticBodyResonatorRendersCleanly()
+{
+    constexpr int kBassIndex = 0;
+    auto settings = mbs::getFactoryPresetBanks()[static_cast<std::size_t>(kBassIndex)][0].settings;
+    settings.body = 1.0f;
+    settings.character = 0.35f;
+    settings.drive = 0.0f;
+    settings.level = 0.45f;
+    settings.decaySeconds = 3.5f;
+    settings.sustainLevel = 0.7f;
+    const auto& chars = mbs::getCharacteristics(kBassIndex);
+
+    const auto rendered = renderBassVoice(settings, chars, 40, 0.88f, 48000.0, 18000);
+    require(bufferIsFinite(rendered), "P1 acoustic body resonator render must stay finite");
+    require(bufferPeak(rendered) > musique::qa::minimumAudiblePeakLinear(),
+            "P1 acoustic body resonator render must remain audible");
+    require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(),
+            "P1 acoustic body resonator render must stay below QA ceiling");
+    require(maxSampleStep(rendered) < 0.95f,
+            "P1 acoustic body resonator render must avoid destructive sample steps");
+}
+
+void testPhaseBPostChainPeakAfterHpfAndLimiter()
+{
+    auto processor = std::make_unique<BassSynthAudioProcessor>();
+    processor->prepareToPlay(48000.0, 256);
+
+    setParameterValue(processor->getAPVTS(), "selected_bass", 6.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(6, "level"), 1.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(6, "output"), 0.0f);
+    setParameterValue(processor->getAPVTS(), "output_gain", 12.0f);
+    setParameterValue(processor->getAPVTS(), "fx_tab0_en", 1.0f);
+    setParameterValue(processor->getAPVTS(), "sat_drive", 16.0f);
+    setParameterValue(processor->getAPVTS(), "sat_mix", 1.0f);
+    setParameterValue(processor->getAPVTS(), "fx_tab5_en", 1.0f);
+    setParameterValue(processor->getAPVTS(), "delay_mix", 0.45f);
+    setParameterValue(processor->getAPVTS(), "delay_feedback", 0.65f);
+    setParameterValue(processor->getAPVTS(), "fx_tab6_en", 1.0f);
+    setParameterValue(processor->getAPVTS(), "reverb_mix", 0.35f);
+    setParameterValue(processor->getAPVTS(), "fx_tab7_en", 1.0f);
+    setParameterValue(processor->getAPVTS(), "limiter_threshold", -0.3f);
+    setParameterValue(processor->getAPVTS(), "limiter_release", 40.0f);
+
+    const std::vector<std::pair<int, juce::MidiMessage>> events = {
+        { 0,     juce::MidiMessage::noteOn(1, 40, (juce::uint8) 127) },
+        { 4800,  juce::MidiMessage::noteOn(1, 43, (juce::uint8) 127) },
+        { 9600,  juce::MidiMessage::noteOff(1, 40) },
+        { 14400, juce::MidiMessage::noteOff(1, 43) }
+    };
+
+    const auto rendered = renderWithMidi(*processor, events, 24000, 256);
+    const auto peak = bufferPeak(rendered);
+    require(bufferIsFinite(rendered), "Phase B post-chain Bass render must stay finite");
+    require(peak > musique::qa::minimumAudiblePeakLinear(), "Phase B post-chain Bass render must be audible");
+    require(peak <= juce::Decibels::decibelsToGain(-0.3f) + 1.0e-4f,
+            "Phase B post-chain Bass peak must stay below limiter ceiling after HPF (peak="
+            + juce::String(juce::Decibels::gainToDecibels(peak), 2) + " dBFS)");
+}
 void testAllFactoryPresetsRenderStable()
 {
     auto processor = makeProcessor();
@@ -1164,8 +1720,8 @@ void testDeterministicOfflineRender()
     second->prepareToPlay(48000.0, 256);
     setParameterValue(first->getAPVTS(), "selected_bass", 3.0f);
     setParameterValue(second->getAPVTS(), "selected_bass", 3.0f);
-    first->applyFactoryPreset(2);
-    second->applyFactoryPreset(2);
+    first->applyFactoryPreset(1);
+    second->applyFactoryPreset(1);
 
     const std::vector<std::pair<int, juce::MidiMessage>> events = {
         { 0, juce::MidiMessage::noteOn(1, 40, (juce::uint8) 92) },
@@ -1505,6 +2061,93 @@ void testControllerPanicAllNotesOff()
     require(processor->getActiveVoiceCount() == 0, "CC123 must eventually clear all active voices");
 }
 
+void testOversizedProcessBlockKeepsScratchBuffersRtSafe()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(48000.0, 256);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "comp_mix", 0.65f);
+    setParameterValue(processor->getAPVTS(), "comp_makeup", 0.0f);
+    setParameterValue(processor->getAPVTS(), "reverb_mix", 0.25f);
+
+    const std::vector<std::pair<int, juce::MidiMessage>> events = {
+        { 0, juce::MidiMessage::noteOn(1, 36, (juce::uint8) 96) },
+        { 6144, juce::MidiMessage::noteOff(1, 36) }
+    };
+
+    const auto rendered = renderWithMidi(*processor, events, 8192, 4096);
+    require(bufferIsFinite(rendered), "Oversized bass process block must stay finite");
+    require(bufferPeak(rendered) >= musique::qa::minimumAudiblePeakLinear(),
+            "Oversized bass process block must remain audible");
+    require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(),
+            "Oversized bass process block must stay below QA peak ceiling");
+}
+
+void testSustainedBassSurvivesPastThirtySeconds()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    constexpr double kSampleRate = 12000.0;
+    constexpr int kBlockSize = 256;
+    processor->prepareToPlay(kSampleRate, kBlockSize);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "output_gain", -12.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "sustain"), 1.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "decay"), 10.0f);
+    setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(0, "release"), 10.0f);
+
+    juce::AudioBuffer<float> block(processor->getTotalNumOutputChannels(), kBlockSize);
+    float postThirtySecondPeak = 0.0f;
+    const int totalSamples = static_cast<int>(kSampleRate * 31.25);
+    const int thresholdSample = static_cast<int>(kSampleRate * 30.5);
+
+    for (int blockStart = 0; blockStart < totalSamples; blockStart += kBlockSize)
+    {
+        block.clear();
+        juce::MidiBuffer midi;
+        if (blockStart == 0)
+            midi.addEvent(juce::MidiMessage::noteOn(1, 36, (juce::uint8) 96), 0);
+
+        processor->processBlock(block, midi);
+        require(bufferIsFinite(block), "Long bass sustain block must stay finite");
+
+        if (blockStart + kBlockSize > thresholdSample)
+            postThirtySecondPeak = juce::jmax(postThirtySecondPeak, bufferPeak(block));
+    }
+
+    require(postThirtySecondPeak > musique::qa::minimumAudiblePeakLinear(),
+            "Sustained bass voice must not be hard-cut at 30 seconds");
+    require(processor->getActiveVoiceCount() > 0,
+            "Sustained bass voice must remain active past the former 30-second age cap");
+}
+
+void testVoiceStealAt192kUsesBoundedQuickRelease()
+{
+    auto processor = makeProcessor();
+    processor->enableAllBuses();
+    processor->prepareToPlay(192000.0, 64);
+    setParameterValue(processor->getAPVTS(), "selected_bass", 0.0f);
+    processor->applyFactoryPreset(0);
+    setParameterValue(processor->getAPVTS(), "output_gain", -18.0f);
+
+    std::vector<std::pair<int, juce::MidiMessage>> events;
+    events.reserve(96);
+    for (int i = 0; i < 80; ++i)
+        events.push_back({ i * 2, juce::MidiMessage::noteOn(1, 28 + (i % 48), (juce::uint8) 48) });
+    for (int i = 0; i < 80; ++i)
+        events.push_back({ 2048 + i, juce::MidiMessage::noteOff(1, 28 + (i % 48)) });
+
+    const auto rendered = renderWithMidi(*processor, events, 4096, 512);
+    require(bufferIsFinite(rendered), "192 kHz bass voice-steal render must stay finite");
+    require(bufferPeak(rendered) > musique::qa::minimumAudiblePeakLinear(),
+            "192 kHz bass voice-steal render must remain audible");
+    require(bufferPeak(rendered) <= musique::qa::maximumSafePeakLinear(),
+            "192 kHz bass voice-steal render must not burst past QA ceiling");
+}
+
 } // namespace
 
 int main()
@@ -1549,6 +2192,20 @@ int main()
         maybeRunTest("testBrightnessStillChangesTimbreWithZeroFilterEnv", testBrightnessStillChangesTimbreWithZeroFilterEnv);
         maybeRunTest("testGlideTimeSupportsLongerPortamento", testGlideTimeSupportsLongerPortamento);
         maybeRunTest("testVoiceStealStressRendersCleanly", testVoiceStealStressRendersCleanly);
+        maybeRunTest("testP0BassVoicePrngRenderIsDeterministic", testP0BassVoicePrngRenderIsDeterministic);
+        maybeRunTest("testP0BassVoiceConcurrentModulationSnapshot", testP0BassVoiceConcurrentModulationSnapshot);
+        maybeRunTest("testP0QuickReleaseReachesMinus60DbInFiveMs", testP0QuickReleaseReachesMinus60DbInFiveMs);
+        maybeRunTest("testP0VoiceStealQuickReleaseAcrossSampleRates", testP0VoiceStealQuickReleaseAcrossSampleRates);
+        maybeRunTest("testP0VoiceStealDoesNotMoveBassVoiceObjects", testP0VoiceStealDoesNotMoveBassVoiceObjects);
+        maybeRunTest("testP0DyingPoolEvictionReusesPointersSafely", testP0DyingPoolEvictionReusesPointersSafely);
+        maybeRunTest("testP0MonoLegatoUnaffectedByPointerPool", testP0MonoLegatoUnaffectedByPointerPool);
+        maybeRunTest("testPhaseCReleaseVoicesReleasesDyingTails", testPhaseCReleaseVoicesReleasesDyingTails);
+        maybeRunTest("testPhaseCPanicClearsActiveAndDyingVoices", testPhaseCPanicClearsActiveAndDyingVoices);
+        maybeRunTest("testP1HighDriveSynthVoicesStayBounded", testP1HighDriveSynthVoicesStayBounded);
+        maybeRunTest("testP1MonoLegatoGlideUpDownStable", testP1MonoLegatoGlideUpDownStable);
+        maybeRunTest("testP1Synth24DbFilterExtremesStayFinite", testP1Synth24DbFilterExtremesStayFinite);
+        maybeRunTest("testP1AcousticBodyResonatorRendersCleanly", testP1AcousticBodyResonatorRendersCleanly);
+        maybeRunTest("testPhaseBPostChainPeakAfterHpfAndLimiter", testPhaseBPostChainPeakAfterHpfAndLimiter);
         maybeRunTest("testAllFactoryPresetsRenderStable", testAllFactoryPresetsRenderStable);
         maybeRunTest("testDeterministicOfflineRender", testDeterministicOfflineRender);
         maybeRunTest("testRenderStabilityAcrossSampleRatesAndBlocks", testRenderStabilityAcrossSampleRatesAndBlocks);
@@ -1560,6 +2217,9 @@ int main()
         maybeRunTest("testFactoryPresetBrowserMetadataFormatting", testFactoryPresetBrowserMetadataFormatting);
         maybeRunTest("testControllerPanicAllSoundOff", testControllerPanicAllSoundOff);
         maybeRunTest("testControllerPanicAllNotesOff", testControllerPanicAllNotesOff);
+        maybeRunTest("testOversizedProcessBlockKeepsScratchBuffersRtSafe", testOversizedProcessBlockKeepsScratchBuffersRtSafe);
+        maybeRunTest("testSustainedBassSurvivesPastThirtySeconds", testSustainedBassSurvivesPastThirtySeconds);
+        maybeRunTest("testVoiceStealAt192kUsesBoundedQuickRelease", testVoiceStealAt192kUsesBoundedQuickRelease);
     }
     catch (const std::exception& e)
     {

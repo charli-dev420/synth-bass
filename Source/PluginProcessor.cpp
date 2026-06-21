@@ -371,7 +371,7 @@ bool hasCanonicalInstrumentAttributes(const juce::XmlElement& xml)
     static constexpr const char* kAttrs[] = {
         "level", "tune", "brightness", "attack", "decay", "sustain", "release",
         "body", "drive", "pitch_env", "filter_env", "sub", "character", "cutoff", "pan",
-        "resonance", "glide_time", "output"
+        "resonance", "glide_time", "pitch_env_time", "snap", "env_shape", "output"
     };
 
     return std::all_of(std::begin(kAttrs), std::end(kAttrs),
@@ -470,6 +470,9 @@ std::unique_ptr<juce::XmlElement> createPresetXml(const juce::String& rootTag,
     root->setAttribute("pan", static_cast<double>(state.settings.pan));
     root->setAttribute("resonance", static_cast<double>(state.settings.resonance));
     root->setAttribute("glide_time", static_cast<double>(state.settings.glideTime));
+    root->setAttribute("pitch_env_time", static_cast<double>(state.settings.pitchEnvTime));
+    root->setAttribute("snap", static_cast<double>(state.settings.snap));
+    root->setAttribute("env_shape", static_cast<double>(state.settings.envShape));
     root->setAttribute("output", state.outputBus);
     writeGlobalFxAttributes(*root, state.fx);
     writePerformanceAttributes(*root, state.performance);
@@ -1211,10 +1214,33 @@ void BassSynthAudioProcessor::resolveParameterPointers()
 void BassSynthAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     preparedSampleRate = std::max(1.0, sampleRate);
+    const int scratchSamples = juce::jmax(32768, samplesPerBlock);
+
+    for (auto& voice : voicePool)
+        voice.forceStop();
+
+    for (int i = 0; i < kMaxVoices; ++i)
+        voices[static_cast<std::size_t>(i)].voice = &voicePool[static_cast<std::size_t>(i)];
+    for (int i = 0; i < kMaxDyingVoices; ++i)
+        dyingVoices[static_cast<std::size_t>(i)].voice = &voicePool[static_cast<std::size_t>(kMaxVoices + i)];
+
+    for (auto& dv : dyingVoices)
+    {
+        jassert(dv.voice != nullptr);
+        dv.inUse = false;
+        dv.outputBus = 0;
+        dv.velocity = 0.0f;
+        dv.activationAge = 0;
+    }
 
     for (auto& slot : voices)
     {
+        jassert(slot.voice != nullptr);
         slot.midiNote = -1;
+        slot.bassIndex = 0;
+        slot.outputBus = 0;
+        slot.velocity = 0.0f;
+        slot.activationAge = 0;
         for (auto& auxSend : slot.auxSendGains)
         {
             auxSend.reset(preparedSampleRate, 0.080);
@@ -1224,7 +1250,7 @@ void BassSynthAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 
     const juce::dsp::ProcessSpec spec {
         preparedSampleRate,
-        static_cast<juce::uint32>(juce::jmax(1, samplesPerBlock)),
+        static_cast<juce::uint32>(juce::jmax(1, scratchSamples)),
         static_cast<juce::uint32>(juce::jmax(1, getMainBusNumOutputChannels()))
     };
 
@@ -1250,9 +1276,9 @@ void BassSynthAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 
     // Initialize new FX processors
     eqProcessor.prepare(preparedSampleRate);
-    chorusProcessor.prepare(preparedSampleRate, samplesPerBlock);
-    delayProcessor.prepare(preparedSampleRate, samplesPerBlock);
-    reverbProcessor.prepare(preparedSampleRate, samplesPerBlock);
+    chorusProcessor.prepare(preparedSampleRate, scratchSamples);
+    delayProcessor.prepare(preparedSampleRate, scratchSamples);
+    reverbProcessor.prepare(preparedSampleRate, scratchSamples);
     limiterProcessor.prepare(preparedSampleRate);
 
     // Reset HPF state
@@ -1262,7 +1288,7 @@ void BassSynthAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
         hpfY1[ch] = 0.0f; hpfY2[ch] = 0.0f;
     }
 
-    satOversampling.initProcessing(static_cast<size_t>(samplesPerBlock));
+    satOversampling.initProcessing(static_cast<size_t>(scratchSamples));
     initializeGlobalFxSmoothers();
 }
 
@@ -1270,12 +1296,25 @@ void BassSynthAudioProcessor::releaseResources()
 {
     for (auto& slot : voices)
     {
+        if (slot.voice != nullptr)
+            slot.voice->forceStop();
         slot.midiNote = -1;
+        slot.bassIndex = 0;
+        slot.outputBus = 0;
+        slot.velocity = 0.0f;
+        slot.activationAge = 0;
         for (auto& auxSend : slot.auxSendGains)
             auxSend.setCurrentAndTargetValue(0.0f);
     }
     for (auto& dv : dyingVoices)
+    {
+        if (dv.voice != nullptr)
+            dv.voice->forceStop();
         dv.inUse = false;
+        dv.outputBus = 0;
+        dv.velocity = 0.0f;
+        dv.activationAge = 0;
+    }
     fxDryBuffer.setSize(0, 0);
     mainDryBuffer.setSize(0, 0);
     voiceRenderBuffer.setSize(0, 0);
@@ -1523,14 +1562,27 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     {
         int envCount = 0;
         for (const auto& slot : voices)
-            if (slot.voice.isActive()) ++envCount;
+        {
+            jassert(slot.voice != nullptr);
+            if (slot.voice != nullptr && slot.voice->isActive()) ++envCount;
+        }
         activeVoiceCountAtomic.store(envCount, std::memory_order_relaxed);
     }
 
     auto mainBuffer = getBusBuffer(buffer, false, 0);
-    mainDryBuffer.setSize(juce::jmax(2, mainBuffer.getNumChannels()), mainBuffer.getNumSamples(), false, false, true);
-    voiceRenderBuffer.setSize(juce::jmax(2, mainBuffer.getNumChannels()), mainBuffer.getNumSamples(), false, false, true);
-    mainDryBuffer.clear();
+    const int workChannels = juce::jmin(mainDryBuffer.getNumChannels(), juce::jmax(2, mainBuffer.getNumChannels()));
+    const int workSamples = juce::jmin(mainDryBuffer.getNumSamples(), mainBuffer.getNumSamples());
+    jassert(workSamples == mainBuffer.getNumSamples());
+    if (workChannels <= 0 || workSamples <= 0)
+        return;
+    if (workSamples < mainBuffer.getNumSamples())
+    {
+        mainBuffer.clear();
+        return;
+    }
+    juce::AudioBuffer<float> mainDryWork(mainDryBuffer.getArrayOfWritePointers(), workChannels, workSamples);
+    juce::AudioBuffer<float> voiceRenderWork(voiceRenderBuffer.getArrayOfWritePointers(), workChannels, workSamples);
+    mainDryWork.clear();
 
     for (int instrumentIndex = 0; instrumentIndex < mbs::kNumBasses; ++instrumentIndex)
     {
@@ -1564,10 +1616,11 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     for (auto& slot : voices)
     {
-        if (slot.voice.isActive())
+        jassert(slot.voice != nullptr);
+        if (slot.voice != nullptr && slot.voice->isActive())
         {
             modmatrix::ModContext voiceContext = blockState.baseModContext;
-            voiceContext.envelope = slot.voice.getEnvelopeLevel();
+            voiceContext.envelope = slot.voice->getEnvelopeLevel();
             voiceContext.velocity = slot.velocity;
             const auto voiceModResult = modulationMatrix.process(voiceContext);
 
@@ -1580,13 +1633,13 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             voiceMod.pitchSemi = voiceModResult.pitchSemi;
             voiceMod.levelMul = voiceModResult.levelMul;
 
-            slot.voice.setPitchBendFactor(pitchBend.pitchBendFactor);
-            slot.voice.setVoiceModulation(voiceMod, preparedSampleRate);
+            slot.voice->setPitchBendFactor(pitchBend.pitchBendFactor);
+            slot.voice->setVoiceModulation(voiceMod, preparedSampleRate);
 
             slot.outputBus = outputBusCache[static_cast<std::size_t>(juce::jlimit(0, mbs::kNumBasses - 1, slot.bassIndex))];
-            voiceRenderBuffer.clear();
-            slot.voice.render(voiceRenderBuffer, 0, voiceRenderBuffer.getNumSamples());
-            mixScratchInto(voiceRenderBuffer, mainDryBuffer);
+            voiceRenderWork.clear();
+            slot.voice->render(voiceRenderWork, 0, voiceRenderWork.getNumSamples());
+            mixScratchInto(voiceRenderWork, mainDryWork);
 
             std::array<float, kNumAuxOutputs> targetAuxGains {};
             if (slot.outputBus > 0
@@ -1601,14 +1654,14 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 auto& auxSend = slot.auxSendGains[static_cast<std::size_t>(auxIndex)];
                 auxSend.setTargetValue(targetAuxGains[static_cast<std::size_t>(auxIndex)]);
                 const float startGain = auxSend.getCurrentValue();
-                const float endGain = auxSend.skip(voiceRenderBuffer.getNumSamples());
+                const float endGain = auxSend.skip(voiceRenderWork.getNumSamples());
 
                 if (std::abs(startGain) <= 1.0e-5f && std::abs(endGain) <= 1.0e-5f)
                     continue;
 
                 auto targetBuffer = getBusBuffer(buffer, false, auxIndex + 1);
                 if (targetBuffer.getNumChannels() > 0 && targetBuffer.getNumSamples() > 0)
-                    mixScratchIntoWithRamp(voiceRenderBuffer, targetBuffer, startGain, endGain);
+                    mixScratchIntoWithRamp(voiceRenderWork, targetBuffer, startGain, endGain);
             }
         }
     }
@@ -1618,13 +1671,19 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     {
         if (!dv.inUse)
             continue;
-        if (!dv.voice.isActive())
+        jassert(dv.voice != nullptr);
+        if (dv.voice == nullptr)
+        {
+            dv.inUse = false;
+            continue;
+        }
+        if (!dv.voice->isActive())
         {
             dv.inUse = false;
             continue;
         }
         modmatrix::ModContext voiceContext = blockState.baseModContext;
-        voiceContext.envelope = dv.voice.getEnvelopeLevel();
+        voiceContext.envelope = dv.voice->getEnvelopeLevel();
         voiceContext.velocity = dv.velocity;
         const auto voiceModResult = modulationMatrix.process(voiceContext);
 
@@ -1637,28 +1696,28 @@ void BassSynthAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         voiceMod.pitchSemi = voiceModResult.pitchSemi;
         voiceMod.levelMul = voiceModResult.levelMul;
 
-        dv.voice.setPitchBendFactor(pitchBend.pitchBendFactor);
-        dv.voice.setVoiceModulation(voiceMod, preparedSampleRate);
+        dv.voice->setPitchBendFactor(pitchBend.pitchBendFactor);
+        dv.voice->setVoiceModulation(voiceMod, preparedSampleRate);
 
         const int targetBus = (dv.outputBus > 0 && dv.outputBus < outputBusCount
                                && getChannelCountOfBus(false, dv.outputBus) > 0) ? dv.outputBus : 0;
-        voiceRenderBuffer.clear();
-        dv.voice.render(voiceRenderBuffer, 0, voiceRenderBuffer.getNumSamples());
-        mixScratchInto(voiceRenderBuffer, mainDryBuffer);
+        voiceRenderWork.clear();
+        dv.voice->render(voiceRenderWork, 0, voiceRenderWork.getNumSamples());
+        mixScratchInto(voiceRenderWork, mainDryWork);
         if (targetBus > 0)
         {
             auto targetBuffer = getBusBuffer(buffer, false, targetBus);
             if (targetBuffer.getNumChannels() > 0 && targetBuffer.getNumSamples() > 0)
-                mixScratchInto(voiceRenderBuffer, targetBuffer);
+                mixScratchInto(voiceRenderWork, targetBuffer);
         }
-        if (!dv.voice.isActive())
+        if (!dv.voice->isActive())
             dv.inUse = false;
     }
 
     if (mainBuffer.getNumChannels() > 0 && mainBuffer.getNumSamples() > 0)
     {
-        for (int ch = 0; ch < juce::jmin(mainBuffer.getNumChannels(), mainDryBuffer.getNumChannels()); ++ch)
-            mainBuffer.copyFrom(ch, 0, mainDryBuffer, ch, 0, mainBuffer.getNumSamples());
+        for (int ch = 0; ch < juce::jmin(mainBuffer.getNumChannels(), mainDryWork.getNumChannels()); ++ch)
+            mainBuffer.copyFrom(ch, 0, mainDryWork, ch, 0, mainBuffer.getNumSamples());
 
         processMasterFxChain(mainBuffer, blockState);
     }
@@ -2300,6 +2359,9 @@ bool BassSynthAudioProcessor::loadUserPreset(const juce::File& file)
     settings.pan = readFiniteXmlFloat(*xml, "pan", settings.pan, -1.0f, 1.0f, &warningCount);
     settings.resonance = readFiniteXmlFloat(*xml, "resonance", settings.resonance, 0.0f, 1.0f, &warningCount);
     settings.glideTime = readFiniteXmlFloat(*xml, "glide_time", settings.glideTime, 0.0f, 1.5f, &warningCount);
+    settings.pitchEnvTime = readFiniteXmlFloat(*xml, "pitch_env_time", settings.pitchEnvTime, 0.0f, 0.60f, &warningCount);
+    settings.snap = readFiniteXmlFloat(*xml, "snap", settings.snap, 0.0f, 1.0f, &warningCount);
+    settings.envShape = readFiniteXmlFloat(*xml, "env_shape", settings.envShape, 0.0f, 1.0f, &warningCount);
     settings = sanitizeBassSettings(b, settings);
     applyBassSettingsToParams(b, settings, false);
 
@@ -3147,14 +3209,20 @@ mbs::BassSettings BassSynthAudioProcessor::snapshotMacroAppliedSettingsForTests(
 int BassSynthAudioProcessor::findFreeVoice() const
 {
     for (int i = 0; i < kMaxVoices; ++i)
-        if (!voices[static_cast<std::size_t>(i)].voice.isActive())
+    {
+        const auto* voice = voices[static_cast<std::size_t>(i)].voice;
+        jassert(voice != nullptr);
+        if (voice == nullptr || !voice->isActive())
             return i;
+    }
 
     int oldest = 0;
     uint64_t oldestAge = UINT64_MAX;
     for (int i = 0; i < kMaxVoices; ++i)
     {
-        if (voices[static_cast<std::size_t>(i)].voice.isReleasing()
+        const auto* voice = voices[static_cast<std::size_t>(i)].voice;
+        jassert(voice != nullptr);
+        if (voice != nullptr && voice->isReleasing()
             && voices[static_cast<std::size_t>(i)].activationAge < oldestAge)
         {
             oldest = i;
@@ -3192,9 +3260,12 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
         // ---- Polyphonic mode ----
         const int slot = findFreeVoice();
         auto& v = voices[static_cast<std::size_t>(slot)];
+        jassert(v.voice != nullptr);
+        if (v.voice == nullptr)
+            return;
 
         // If stealing an active voice, move it to the dying pool
-        if (v.voice.isActive())
+        if (v.voice->isActive())
         {
             DyingVoiceSlot* target = nullptr;
             for (auto& dv : dyingVoices)
@@ -3209,8 +3280,16 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
                     if (dv.activationAge < target->activationAge)
                         target = &dv;
             }
-            std::swap(target->voice, v.voice);
-            target->voice.forceQuickRelease();
+            jassert(target != nullptr);
+            if (target == nullptr)
+                return;
+            if (target->inUse && target->voice != nullptr)
+                target->voice->forceStop();
+            jassert(target->voice != nullptr && v.voice != nullptr);
+            auto* recycledVoice = target->voice;
+            target->voice = v.voice;
+            v.voice = recycledVoice;
+            target->voice->forceQuickRelease();
             target->outputBus = v.outputBus;
             target->velocity = v.velocity;
             target->inUse = true;
@@ -3227,7 +3306,7 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
         }
         v.velocity = velocity;
         v.activationAge = ++voiceAgeCounter;
-        v.voice.noteOn(settings, chars, midiNote, velocity, preparedSampleRate);
+        v.voice->noteOn(settings, chars, midiNote, velocity, preparedSampleRate);
     }
     else
     {
@@ -3238,10 +3317,14 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
         const float glideTime = readCachedParamValue(globalParamRefs.glideTime);
 
         if (ms.voiceSlot >= 0 && ms.voiceSlot < kMaxVoices
-            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice.isActive())
+            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice != nullptr
+            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice->isActive())
         {
             // Voice already playing — glide or retrigger
             auto& v = voices[static_cast<std::size_t>(ms.voiceSlot)];
+            jassert(v.voice != nullptr);
+            if (v.voice == nullptr)
+                return;
             v.midiNote = midiNote;
             v.outputBus = outputBus;
             v.velocity = velocity;
@@ -3250,13 +3333,13 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
             if (monoMode == 2)
             {
                 // Legato: glide pitch, don't retrigger envelope
-                v.voice.glideToNote(midiNote, glideTime);
+                v.voice->glideToNote(midiNote, glideTime);
             }
             else
             {
                 // Mono: retrigger envelope with glide
                 settings.glideTime = glideTime;
-                v.voice.retriggerWithGlide(settings, chars, midiNote, velocity, preparedSampleRate);
+                v.voice->retriggerWithGlide(settings, chars, midiNote, velocity, preparedSampleRate);
             }
         }
         else
@@ -3264,6 +3347,9 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
             // No active voice — fresh start
             const int slot = findFreeVoice();
             auto& v = voices[static_cast<std::size_t>(slot)];
+            jassert(v.voice != nullptr);
+            if (v.voice == nullptr)
+                return;
             v.midiNote = midiNote;
             v.bassIndex = bassIndex;
             v.outputBus = outputBus;
@@ -3274,7 +3360,7 @@ void BassSynthAudioProcessor::triggerNoteOn(int bassIndex, int midiNote, float v
             }
             v.velocity = velocity;
             v.activationAge = ++voiceAgeCounter;
-            v.voice.noteOn(settings, chars, midiNote, velocity, preparedSampleRate);
+            v.voice->noteOn(settings, chars, midiNote, velocity, preparedSampleRate);
             ms.voiceSlot = slot;
         }
     }
@@ -3290,10 +3376,11 @@ void BassSynthAudioProcessor::triggerNoteOff(int bassIndex, int midiNote)
         // ---- Polyphonic ----
         for (auto& slot : voices)
         {
-            if (slot.voice.isActive() && !slot.voice.isReleasing() &&
+            jassert(slot.voice != nullptr);
+            if (slot.voice != nullptr && slot.voice->isActive() && !slot.voice->isReleasing() &&
                 slot.midiNote == midiNote && slot.bassIndex == bassIndex)
             {
-                slot.voice.noteOff();
+                slot.voice->noteOff();
             }
         }
     }
@@ -3304,7 +3391,8 @@ void BassSynthAudioProcessor::triggerNoteOff(int bassIndex, int midiNote)
         ms.removeNote(midiNote);
 
         if (ms.voiceSlot >= 0 && ms.voiceSlot < kMaxVoices
-            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice.isActive())
+            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice != nullptr
+            && voices[static_cast<std::size_t>(ms.voiceSlot)].voice->isActive())
         {
             const int prevNote = ms.topNote();
             if (prevNote >= 0)
@@ -3313,12 +3401,12 @@ void BassSynthAudioProcessor::triggerNoteOff(int bassIndex, int midiNote)
                 auto& v = voices[static_cast<std::size_t>(ms.voiceSlot)];
                 v.midiNote = prevNote;
                 const float glideTime = readCachedParamValue(globalParamRefs.glideTime);
-                v.voice.glideToNote(prevNote, glideTime);
+                v.voice->glideToNote(prevNote, glideTime);
             }
             else
             {
                 // No more held notes — release
-                voices[static_cast<std::size_t>(ms.voiceSlot)].voice.noteOff();
+                voices[static_cast<std::size_t>(ms.voiceSlot)].voice->noteOff();
                 ms.voiceSlot = -1;
             }
         }
@@ -3337,7 +3425,9 @@ void BassSynthAudioProcessor::panicAllVoices()
     }
     for (auto& slot : voices)
     {
-        slot.voice.forceStop();
+        jassert(slot.voice != nullptr);
+        if (slot.voice != nullptr)
+            slot.voice->forceStop();
         slot.midiNote = -1;
         slot.bassIndex = 0;
         slot.velocity = 0.0f;
@@ -3345,6 +3435,9 @@ void BassSynthAudioProcessor::panicAllVoices()
     }
     for (auto& slot : dyingVoices)
     {
+        jassert(slot.voice != nullptr);
+        if (slot.voice != nullptr)
+            slot.voice->forceStop();
         slot.inUse = false;
         slot.outputBus = 0;
         slot.velocity = 0.0f;
@@ -3366,12 +3459,13 @@ void BassSynthAudioProcessor::releaseVoices(int midiChannel, bool immediate)
 
     for (auto& slot : voices)
     {
-        if (!slot.voice.isActive())
+        jassert(slot.voice != nullptr);
+        if (slot.voice == nullptr || !slot.voice->isActive())
             continue;
 
         if (immediate)
         {
-            slot.voice.forceQuickRelease();
+            slot.voice->forceStop();
             slot.midiNote = -1;
             slot.bassIndex = 0;
             slot.velocity = 0.0f;
@@ -3379,15 +3473,31 @@ void BassSynthAudioProcessor::releaseVoices(int midiChannel, bool immediate)
         }
         else
         {
-            slot.voice.forceStop();
-            slot.midiNote = -1;
-            slot.bassIndex = 0;
-            slot.velocity = 0.0f;
-            slot.activationAge = 0;
+            slot.voice->forceQuickRelease();
         }
     }
 
-    if (!immediate)
+    for (auto& slot : dyingVoices)
+    {
+        jassert(slot.voice != nullptr);
+        if (!slot.inUse || slot.voice == nullptr)
+            continue;
+
+        if (immediate)
+        {
+            slot.voice->forceStop();
+            slot.inUse = false;
+            slot.outputBus = 0;
+            slot.velocity = 0.0f;
+            slot.activationAge = 0;
+        }
+        else
+        {
+            slot.voice->forceQuickRelease();
+        }
+    }
+
+    if (immediate)
         resetGlobalTailState();
 }
 
@@ -3452,32 +3562,33 @@ void BassSynthAudioProcessor::processMasterFxChain(juce::AudioBuffer<float>& mai
     for (int chunkStart = 0; chunkStart < totalSamples; chunkStart += kFxControlChunkSize)
     {
         const int chunkSamples = juce::jmin(kFxControlChunkSize, totalSamples - chunkStart);
-        fxChunkBuffer.setSize(mainBuffer.getNumChannels(), chunkSamples, false, false, true);
+        juce::AudioBuffer<float> fxChunkWork(fxChunkBuffer.getArrayOfWritePointers(),
+                                             mainBuffer.getNumChannels(), chunkSamples);
 
         for (int channel = 0; channel < mainBuffer.getNumChannels(); ++channel)
-            fxChunkBuffer.copyFrom(channel, 0, mainBuffer, channel, chunkStart, chunkSamples);
+            fxChunkWork.copyFrom(channel, 0, mainBuffer, channel, chunkStart, chunkSamples);
 
         auto chunkState = advanceSmoothedGlobalBlockState(blockState, chunkSamples);
 
-        processGlobalTransient(fxChunkBuffer, chunkState);
-        processGlobalSaturator(fxChunkBuffer, chunkState);
-        processGlobalCompressor(fxChunkBuffer, chunkState);
-        processGlobalEQ(fxChunkBuffer, chunkState);
-        processGlobalChorus(fxChunkBuffer, chunkState);
-        applyGlobalLfo(fxChunkBuffer, chunkState);
-        processGlobalDelay(fxChunkBuffer, chunkState);
-        processGlobalReverb(fxChunkBuffer, chunkState);
+        processGlobalTransient(fxChunkWork, chunkState);
+        processGlobalSaturator(fxChunkWork, chunkState);
+        processGlobalCompressor(fxChunkWork, chunkState);
+        processGlobalEQ(fxChunkWork, chunkState);
+        processGlobalChorus(fxChunkWork, chunkState);
+        applyGlobalLfo(fxChunkWork, chunkState);
+        processGlobalDelay(fxChunkWork, chunkState);
+        processGlobalReverb(fxChunkWork, chunkState);
 
         const float chunkGainEnd = chunkGainStart + gainStep * static_cast<float>(chunkSamples);
-        for (int channel = 0; channel < fxChunkBuffer.getNumChannels(); ++channel)
-            fxChunkBuffer.applyGainRamp(channel, 0, chunkSamples, chunkGainStart, chunkGainEnd);
+        for (int channel = 0; channel < fxChunkWork.getNumChannels(); ++channel)
+            fxChunkWork.applyGainRamp(channel, 0, chunkSamples, chunkGainStart, chunkGainEnd);
         chunkGainStart = chunkGainEnd;
 
-        processGlobalLimiter(fxChunkBuffer, chunkState);
-        applyGlobalHpf(fxChunkBuffer);
+        applyGlobalHpf(fxChunkWork);
+        processGlobalLimiter(fxChunkWork, chunkState);
 
         for (int channel = 0; channel < mainBuffer.getNumChannels(); ++channel)
-            mainBuffer.copyFrom(channel, chunkStart, fxChunkBuffer, channel, 0, chunkSamples);
+            mainBuffer.copyFrom(channel, chunkStart, fxChunkWork, channel, 0, chunkSamples);
     }
 
     outputGainCurrent = targetGain;
@@ -3533,7 +3644,8 @@ void BassSynthAudioProcessor::processGlobalSaturator(juce::AudioBuffer<float>& m
     juce::dsp::AudioBlock<float> block(mainBuffer);
     const bool needsMix = mix < 0.9999f;
     if (needsMix)
-        fxDryBuffer.makeCopyOf(mainBuffer, true);
+        for (int ch = 0; ch < mainBuffer.getNumChannels(); ++ch)
+            fxDryBuffer.copyFrom(ch, 0, mainBuffer, ch, 0, mainBuffer.getNumSamples());
 
     auto osBlock = satOversampling.processSamplesUp(block);
     for (size_t ch = 0; ch < osBlock.getNumChannels(); ++ch)
@@ -3568,7 +3680,8 @@ void BassSynthAudioProcessor::processGlobalCompressor(juce::AudioBuffer<float>& 
         return;
 
     updateGlobalEffectParameters(blockState);
-    fxDryBuffer.makeCopyOf(mainBuffer, true);
+    for (int ch = 0; ch < mainBuffer.getNumChannels(); ++ch)
+        fxDryBuffer.copyFrom(ch, 0, mainBuffer, ch, 0, mainBuffer.getNumSamples());
 
     juce::dsp::AudioBlock<float> block(mainBuffer);
     juce::dsp::ProcessContextReplacing<float> context(block);
@@ -3739,8 +3852,9 @@ void BassSynthAudioProcessor::applyGlobalLfo(juce::AudioBuffer<float>& mainBuffe
     {
         for (auto& slot : voices)
         {
-            if (slot.voice.isActive())
-                slot.voice.setLfoCutoffMod(0.0f);
+            jassert(slot.voice != nullptr);
+            if (slot.voice != nullptr && slot.voice->isActive())
+                slot.voice->setLfoCutoffMod(0.0f);
         }
         return;
     }
@@ -3809,16 +3923,18 @@ void BassSynthAudioProcessor::applyGlobalLfo(juce::AudioBuffer<float>& mainBuffe
         const float cutoffMod = midLfo * depth * cutoffDepthScale;
         for (auto& slot : voices)
         {
-            if (slot.voice.isActive())
-                slot.voice.setLfoCutoffMod(cutoffMod);
+            jassert(slot.voice != nullptr);
+            if (slot.voice != nullptr && slot.voice->isActive())
+                slot.voice->setLfoCutoffMod(cutoffMod);
         }
     }
     else
     {
         for (auto& slot : voices)
         {
-            if (slot.voice.isActive())
-                slot.voice.setLfoCutoffMod(0.0f);
+            jassert(slot.voice != nullptr);
+            if (slot.voice != nullptr && slot.voice->isActive())
+                slot.voice->setLfoCutoffMod(0.0f);
         }
     }
 }

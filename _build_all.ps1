@@ -100,10 +100,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "CMake configuration failed."
 }
 
+$vst3Target = "${pluginTarget}_VST3"
+$vst3ProjectFile = Join-Path $buildPath "$vst3Target.vcxproj"
+$hasVst3Target = Test-Path $vst3ProjectFile
+
 $standaloneTarget = "${pluginTarget}_Standalone"
 $standaloneProjectFile = Join-Path $buildPath "$standaloneTarget.vcxproj"
 if (Test-Path $standaloneProjectFile) {
     $targets = @($pluginTarget, $standaloneTarget) + $consoleTargets | Select-Object -Unique
+}
+
+if ($hasVst3Target) {
+    $targets = @($pluginTarget, $vst3Target) + $targets | Select-Object -Unique
 }
 
 foreach ($target in $targets) {
@@ -120,6 +128,19 @@ if ($targets -contains $standaloneTarget) {
 
     if (-not $standaloneExe) {
         throw "Standalone build target '$standaloneTarget' completed but no standalone executable was found."
+    }
+}
+
+if ($targets -contains $vst3Target) {
+    $vst3BundleDir = Join-Path $buildPath "${pluginTarget}_artefacts\$Configuration\VST3\${pluginTarget}.vst3"
+    $vst3Binary = Join-Path $vst3BundleDir "Contents\x86_64-win\${pluginTarget}.vst3"
+
+    if (-not (Test-Path $vst3BundleDir)) {
+        throw "VST3 build target '$vst3Target' completed but no VST3 bundle was found at $vst3BundleDir."
+    }
+
+    if (-not (Test-Path $vst3Binary)) {
+        throw "VST3 build target '$vst3Target' completed but no VST3 binary was found at $vst3Binary."
     }
 }
 

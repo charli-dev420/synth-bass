@@ -93,9 +93,12 @@ public:
     };
 
 private:
+    // Dying voice pool -- stolen voices fade out here
+    static constexpr int kMaxDyingVoices = 8;
+
     struct VoiceSlot
     {
-        mbs::BassVoice voice;
+        mbs::BassVoice* voice = nullptr;
         int midiNote   = -1;
         int bassIndex  = 0;
         int outputBus  = 0;
@@ -104,11 +107,9 @@ private:
         std::array<juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear>, kNumAuxOutputs> auxSendGains;
     };
 
-    // Dying voice pool — stolen voices fade out here
-    static constexpr int kMaxDyingVoices = 8;
     struct DyingVoiceSlot
     {
-        mbs::BassVoice voice;
+        mbs::BassVoice* voice = nullptr;
         int  outputBus = 0;
         float velocity = 0.0f;
         bool inUse     = false;
@@ -322,6 +323,7 @@ private:
     std::array<int,        mbs::kNumBasses> currentPresetIndices;
     std::array<juce::File, mbs::kNumBasses> currentUserPresetFiles;
 
+    std::array<mbs::BassVoice, kMaxVoices + kMaxDyingVoices> voicePool;
     std::array<VoiceSlot, kMaxVoices> voices;
     uint64_t voiceAgeCounter = 0;
 

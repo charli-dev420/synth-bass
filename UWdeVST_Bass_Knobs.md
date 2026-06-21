@@ -4,10 +4,12 @@ Ce document decrit l'etat reel des controles exposes par le synth bass, leurs ID
 
 ## Notes
 
+- Positionnement release: multi-basse synthetique de production / bass sketch / low-end design. Le produit ne revendique pas une emulation realiste premium ni une banque basse multisamplee.
+- Contrat release courant: 9 basses, 3 familles, 18 presets factory: 2 par basse (`Reference` et `Signature`).
 - Les controles instrument utilisent le pattern `bass_<bassIndex>_<suffix>`.
 - `bassIndex` va de `0` a `8`.
 - Les slots de modulation utilisent le pattern `mod_<slot>_<field>` avec `slot` de `0` a `7` et `field` dans `source`, `dest`, `amount`.
-- Le schema de preset bass courant est `format_version = 2`.
+- Le schema de preset bass courant est `format_version = 3`.
 - Les presets bass rappellent le son de la basse courante, les FX, les macros/performance, et la mod matrix.
 - Les presets bass ne rappellent pas `selected_bass`, `output_gain`, `velocity_curve` ni `fx_lock`.
 
@@ -72,6 +74,10 @@ Ce document decrit l'etat reel des controles exposes par le synth bass, leurs ID
 | Cutoff | `bass_<n>_cutoff` | Frequence de coupure principale. |
 | Pan | `bass_<n>_pan` | Placement stereo. |
 | Resonance | `bass_<n>_resonance` | Resonance du filtre principal. |
+| Filter Env | `bass_<n>_filter_env` | Quantite d'enveloppe appliquee au filtre. |
+| Pitch Env Time | `bass_<n>_pitch_env_time` | Duree de l'enveloppe de hauteur. |
+| Snap | `bass_<n>_snap` | Fermete de l'attaque. |
+| Env Shape | `bass_<n>_env_shape` | Forme de l'enveloppe d'amplitude. |
 
 ## Panneau 3: MACRO+LFO
 
@@ -231,7 +237,7 @@ Ce document decrit l'etat reel des controles exposes par le synth bass, leurs ID
 
 ### Rappeles par preset user ou factory override bass
 
-- `bass_<n>_level`, `tune`, `brightness`, `attack`, `decay`, `sustain`, `release`, `body`, `drive`, `pitch_env`, `sub`, `character`, `cutoff`, `pan`, `resonance`, `output`
+- `bass_<n>_level`, `tune`, `brightness`, `attack`, `decay`, `sustain`, `release`, `body`, `drive`, `pitch_env`, `sub`, `character`, `cutoff`, `pan`, `resonance`, `filter_env`, `pitch_env_time`, `snap`, `env_shape`, `output`
 - `glide_time`
 - `mono_mode`
 - `lfo_rate`, `lfo_depth`, `lfo_wave`, `lfo_dest`
@@ -253,4 +259,3 @@ Ce document decrit l'etat reel des controles exposes par le synth bass, leurs ID
 
 - Le plugin continue a importer l'ancien noeud XML `ModMatrix`.
 - Lors du restore d'etat ou du chargement d'un preset legacy, les donnees legacy sont migrees vers les nouveaux parametres APVTS de la mod matrix.
-

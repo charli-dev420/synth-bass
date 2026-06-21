@@ -36,7 +36,8 @@ constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
     // --- Acoustic ---
     // Contrebasse: warm, woody, plucked string with body resonance
     // Phase 2: inharmonicity +, body feedback tamed, pluck reduced (less 'clack', more 'thud')
-    { OscMode::Additive, 8, 0.0006f, 0.000f, 1,
+    // Phase 3: inharmonicity 0.0006 -> 0.0003 (realistic double bass stretch ~0.0002-0.0004)
+    { OscMode::Additive, 8, 0.0003f, 0.000f, 1,
       0.0f, 0.0f,
       0.40f, 2.0f, 0.28f,
       1.00f, 0.55f, 0.45f,
@@ -101,9 +102,10 @@ constexpr std::array<BassCharacteristics, kNumBasses> kChars = {{
       0.0f, 0.0f,
       3.0f, false },
     // Reese Bass: 3 detuned saws, dark and pulsating
+    // Phase 3: decay2Ratio 4.0 -> 3.0 (reduces long tail that muddies polyphony)
     { OscMode::Saw, 0, 0.0f, 0.015f, 3,
       0.0f, 0.0f,
-      0.30f, 4.0f, 0.35f,
+      0.30f, 3.0f, 0.35f,
       0.0f, 0.0f, 0.0f,
       0.0f, 0.0f,
       0.8f, false },

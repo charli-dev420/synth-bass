@@ -148,6 +148,7 @@ public:
     void updateMetadata(int synthIndex, const char* synth, const char* preset, const char* instrument)
     {
         if (!ptr) return;
+        ptr->metadataVersion.fetch_add(1, std::memory_order_release);
         ptr->activeSynthIndex.store(synthIndex, std::memory_order_relaxed);
         if (synth)      { detail::copyCString(ptr->synthName, synth); }
         if (preset)     { detail::copyCString(ptr->presetName, preset); }
@@ -159,9 +160,11 @@ public:
     void updatePluginIdentity(const char* uid, const char* manufacturer, int tier)
     {
         if (!ptr) return;
+        ptr->metadataVersion.fetch_add(1, std::memory_order_release);
         if (uid)          { detail::copyCString(ptr->pluginUid, uid); }
         if (manufacturer) { detail::copyCString(ptr->pluginManufacturer, manufacturer); }
         ptr->pluginTier = tier;
+        ptr->metadataVersion.fetch_add(1, std::memory_order_release);
     }
 
     /// Publish a compact JSON object containing the current parameter state.
@@ -276,15 +279,59 @@ public:
         return ptr ? ptr->activeSynthIndex.load(std::memory_order_relaxed) : -1;
     }
 
-    /// Read metadata strings (non-atomic, acceptable for dev tool with rare writes).
+    /// Read metadata strings with a seqlock to avoid tearing during rare writes.
     void getMetadata(char* synthOut, int synthLen,
                      char* presetOut, int presetLen,
                      char* instrOut, int instrLen) const
     {
         if (!ptr) return;
-        if (synthOut  && synthLen > 0)  { detail::copyCString(synthOut,  static_cast<size_t>(synthLen),  ptr->synthName); }
-        if (presetOut && presetLen > 0) { detail::copyCString(presetOut, static_cast<size_t>(presetLen), ptr->presetName); }
-        if (instrOut  && instrLen > 0)  { detail::copyCString(instrOut,  static_cast<size_t>(instrLen),  ptr->instrumentName); }
+        for (int attempt = 0; attempt < 3; ++attempt)
+        {
+            const auto versionBefore = ptr->metadataVersion.load(std::memory_order_acquire);
+            if ((versionBefore & 1u) != 0u)
+                continue;
+
+            if (synthOut  && synthLen > 0)  { detail::copyCString(synthOut,  static_cast<size_t>(synthLen),  ptr->synthName); }
+            if (presetOut && presetLen > 0) { detail::copyCString(presetOut, static_cast<size_t>(presetLen), ptr->presetName); }
+            if (instrOut  && instrLen > 0)  { detail::copyCString(instrOut,  static_cast<size_t>(instrLen),  ptr->instrumentName); }
+
+            const auto versionAfter = ptr->metadataVersion.load(std::memory_order_acquire);
+            if (versionBefore == versionAfter && (versionAfter & 1u) == 0u)
+                return;
+        }
+
+        if (synthOut  && synthLen > 0)  synthOut[0] = '\0';
+        if (presetOut && presetLen > 0) presetOut[0] = '\0';
+        if (instrOut  && instrLen > 0)  instrOut[0] = '\0';
+    }
+
+    void getPluginIdentity(char* uidOut, int uidLen,
+                           char* manufacturerOut, int manufacturerLen,
+                           int* tierOut) const
+    {
+        if (uidOut && uidLen > 0) uidOut[0] = '\0';
+        if (manufacturerOut && manufacturerLen > 0) manufacturerOut[0] = '\0';
+        if (tierOut) *tierOut = 0;
+        if (!ptr) return;
+
+        for (int attempt = 0; attempt < 3; ++attempt)
+        {
+            const auto versionBefore = ptr->metadataVersion.load(std::memory_order_acquire);
+            if ((versionBefore & 1u) != 0u)
+                continue;
+
+            if (uidOut && uidLen > 0) { detail::copyCString(uidOut, static_cast<size_t>(uidLen), ptr->pluginUid); }
+            if (manufacturerOut && manufacturerLen > 0) { detail::copyCString(manufacturerOut, static_cast<size_t>(manufacturerLen), ptr->pluginManufacturer); }
+            if (tierOut) *tierOut = ptr->pluginTier;
+
+            const auto versionAfter = ptr->metadataVersion.load(std::memory_order_acquire);
+            if (versionBefore == versionAfter && (versionAfter & 1u) == 0u)
+                return;
+        }
+
+        if (uidOut && uidLen > 0) uidOut[0] = '\0';
+        if (manufacturerOut && manufacturerLen > 0) manufacturerOut[0] = '\0';
+        if (tierOut) *tierOut = 0;
     }
 
     /// Read the last published parameter-state JSON snapshot.

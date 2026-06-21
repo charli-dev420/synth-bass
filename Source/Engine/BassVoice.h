@@ -3,7 +3,9 @@
 #include <JuceHeader.h>
 #include "BassDefs.h"
 
+#include <atomic>
 #include <array>
+#include <cstdint>
 
 namespace mbs
 {
@@ -50,10 +52,38 @@ private:
 
     float readComb(const float* buf, int bufSize, int writePos, float delaySamples) const;
     static float polyBlep(float t, float dt);
+    static float tanhAntiderivative(float x) noexcept;
+    static float adaaTanh(float x, float previousX) noexcept;
     void updateEnvelopeCoefficients(float sampleRate) noexcept;
     void updatePanFromModulation() noexcept;
     void updateResonanceResponse() noexcept;
     float computeDetuneBlend() const noexcept;
+    void applyVoiceModulation(const VoiceModulation& modulation, float sampleRate) noexcept;
+    void consumePendingModulation(float sampleRate) noexcept;
+    void seedRandomState(int note, float velocity) noexcept;
+    float nextRandomFloat() noexcept;
+    float nextRandomBipolar() noexcept;
+    static float coeffToTarget(float seconds, double sampleRate, float target) noexcept;
+
+    struct AtomicVoiceModulation
+    {
+        AtomicVoiceModulation() noexcept = default;
+        AtomicVoiceModulation(const AtomicVoiceModulation& other) noexcept;
+        AtomicVoiceModulation& operator=(const AtomicVoiceModulation& other) noexcept;
+
+        void reset(const VoiceModulation& modulation = {}) noexcept;
+        void publish(const VoiceModulation& modulation) noexcept;
+        bool tryRead(VoiceModulation& modulation) const noexcept;
+
+        std::atomic<uint32_t> sequence { 0 };
+        std::atomic<float> cutoffMul { 1.0f };
+        std::atomic<float> resonanceAdd { 0.0f };
+        std::atomic<float> panAdd { 0.0f };
+        std::atomic<float> attackScale { 1.0f };
+        std::atomic<float> decayScale { 1.0f };
+        std::atomic<float> pitchSemi { 0.0f };
+        std::atomic<float> levelMul { 1.0f };
+    };
 
     BassSettings         settings{};
     BassSettings         baseSettings{};
@@ -70,6 +100,7 @@ private:
     {
         float phase    = 0.0f;
         float phaseInc = 0.0f;
+        float freqRatio = 1.0f;
     };
     std::array<OscState, kMaxOsc> oscs{};
     int numOscs = 1;
@@ -84,6 +115,7 @@ private:
     {
         float phase     = 0.0f;
         float phaseInc  = 0.0f;
+        float freqRatio = 1.0f;
         float amplitude = 0.0f;
         float decayCoeff = 1.0f;
     };
@@ -141,13 +173,15 @@ private:
     float pluckLpState     = 0.0f;  // 1-pole LP state for Slap pluck HF rolloff (~8 kHz)
     float unisonLpState    = 0.0f;  // 1-pole LP state for Reese unison HF rolloff
     float unisonLpCoeff    = 1.0f;  // LP coeff precomputed in noteOn (1.0 = bypass)
+    float driveAdaaPreviousInput = 0.0f;
+    float characterAdaaPreviousInput = 0.0f;
 
     // Pan
     float panL = 0.7071f;
     float panR = 0.7071f;
 
     // Noise
-    juce::Random rng;
+    uint32_t rngState = 0x6D2B79F5u;
 
     float pitchBendFactor = 1.0f;
     float modPitchFactor  = 1.0f;
@@ -160,6 +194,7 @@ private:
     float basePan = 0.0f;
     float baseLevel = 1.0f;
     VoiceModulation currentModulation {};
+    AtomicVoiceModulation pendingModulation {};
     bool quickReleaseForced = false;
 
     int ageSamples    = 0;
