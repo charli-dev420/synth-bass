@@ -1879,6 +1879,17 @@ void testEditorLayoutSnapshot()
         require(snapshot.selectorPanelBounds.contains(snapshot.familyTabsBounds), "Family tabs must remain inside selector panel");
         require(snapshot.selectorPanelBounds.contains(snapshot.modelLabelBounds), "Model label must remain inside selector panel");
         require(snapshot.selectorPanelBounds.contains(snapshot.modelSelectorBounds), "Model selector must remain inside selector panel");
+        require(snapshot.rightPanelBounds.getBottom() <= snapshot.keyboardBounds.getY(),
+                "Right panel paint bounds must stay above the keyboard dock");
+        require(!snapshot.performanceStripBounds.isEmpty(), "Performance strip must expose controls");
+        require(snapshot.rightPanelBounds.contains(snapshot.performanceStripBounds),
+                "Performance strip must stay inside the right panel");
+        require(!snapshot.pitchBendRangeBounds.intersects(snapshot.glideTimeBounds),
+                "Pitch bend range must not overlap glide");
+        require(snapshot.resonanceBounds.getBottom() <= snapshot.keyboardBounds.getY() - 8,
+                "Resonance control must leave a stable margin above the keyboard dock");
+        require(snapshot.monoModeBounds.getBottom() <= snapshot.keyboardBounds.getY() - 8,
+                "Mode selector must leave a stable margin above the keyboard dock");
     };
 
     {
@@ -1893,7 +1904,34 @@ void testEditorLayoutSnapshot()
         BassSynthAudioProcessorEditor editor(*processor);
         editor.setSize(980, 700);
         editor.resized();
-        validateSnapshot(editor.captureLayoutSnapshotForTests(), true);
+        editor.setRightPanelSectionForTests(0);
+        const auto snapshot = editor.captureLayoutSnapshotForTests();
+        validateSnapshot(snapshot, true);
+        require(!snapshot.lfoVisualVisible, "Compact 980x700 layout should hide only the LFO visual when space is insufficient");
+        require(snapshot.glideTimeBounds.getBottom() < snapshot.keyboardBounds.getY(),
+                "Glide must remain above keyboard in compact layout");
+    }
+
+    {
+        auto processor = makeProcessor();
+        setParameterValue(processor->getAPVTS(), "selected_bass", 1.0f);
+        setParameterValue(processor->getAPVTS(), BassSynthAudioProcessor::makeBassParamId(1, "cutoff"), 3600.0f);
+        setParameterValue(processor->getAPVTS(), "glide_time", 0.03f);
+        BassSynthAudioProcessorEditor editor(*processor);
+        editor.setSize(1100, 780);
+        editor.setRightPanelSectionForTests(0);
+        const auto snapshot = editor.captureLayoutSnapshotForTests();
+        validateSnapshot(snapshot, true);
+        require(snapshot.lfoVisualVisible, "LFO visual should remain visible at the target compact size");
+        require(snapshot.rightPanelBounds.contains(snapshot.lfoVisualBounds), "LFO visual must stay inside the right panel");
+        require(snapshot.lfoVisualBounds.getBottom() <= snapshot.keyboardBounds.getY() - 18,
+                "LFO visual must leave a stable margin above the keyboard dock");
+        require(!snapshot.glideTimeBounds.intersects(snapshot.modWheelTargetBounds),
+                "Glide must not overlap mod wheel target");
+        require(snapshot.glideTimeDisplayText == "30 ms",
+                "Glide must use compact formatted text instead of raw decimals");
+        require(snapshot.cutoffDisplayText == "3.60 kHz",
+                "Cutoff must use compact formatted text instead of raw Hz decimals; actual: " + snapshot.cutoffDisplayText);
     }
 
     {

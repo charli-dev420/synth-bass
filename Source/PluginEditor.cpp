@@ -347,8 +347,8 @@ const MacroUiContext& macroUiContextForFamily(const mbs::Family family)
           "Air - opens brightness and cutoff so the bass reads in a dense mix.",
           "Punch - tightens the attack and articulation without turning the bass harsh.",
           "Depth - extends note body and release carefully for a fuller acoustic line." },
-        "Workflow: start with Boom, then Air for mix definition, then Punch for articulation.",
-        "Guardrails: limited fake sub, centered low-end, natural transient behavior."
+        "Workflow: Boom body, Air definition, Punch attack.",
+        "Guardrails: low fake sub, centered lows, natural transient."
     };
 
     static const MacroUiContext eight08 {
@@ -360,8 +360,8 @@ const MacroUiContext& macroUiContextForFamily(const mbs::Family family)
           "Snap - adds brightness and cutoff so the 808 reads on smaller speakers.",
           "Punch - sharpens attack and pitch envelope for a clearer front transient.",
           "Space - lengthens decay and release carefully so the kick still has room." },
-        "Workflow: Weight for sub, Punch for front edge, Space only after the groove is locked.",
-        "Guardrails: mono-safe sub, short-tail protection, no stereo smear in the low end."
+        "Workflow: Weight sub, Punch edge, Space after groove locks.",
+        "Guardrails: mono-safe sub, short tails, no low smear."
     };
 
     static const MacroUiContext synth {
@@ -373,8 +373,8 @@ const MacroUiContext& macroUiContextForFamily(const mbs::Family family)
           "Edge - opens brightness, cutoff and filter motion for clearer note definition.",
           "Punch - tightens attack and boosts contour so the synth bass speaks earlier.",
           "Depth - extends body and release while keeping the note center readable." },
-        "Workflow: Drive for density, Edge for definition, Depth only once the bass line is readable.",
-        "Guardrails: clear tonal center, controlled drive, mix-safe low-end extension."
+        "Workflow: Drive density, Edge definition, Depth after clarity.",
+        "Guardrails: tonal center, controlled drive, mix-safe lows."
     };
 
     switch (family)
@@ -838,10 +838,43 @@ BassSynthAudioProcessorEditor::captureLayoutSnapshotForTests() const
     snapshot.voiceBounds = voiceCountLabel.getBounds();
     snapshot.ccBounds = midiCCPageLabel.getBounds();
     snapshot.fxLockBounds = fxLockButton.getBounds();
+    snapshot.keyboardBounds = { layout.contentX, layout.kbY, layout.contentW, layout.kbH };
+    snapshot.rightPanelBounds = { layout.col3X, layout.bodyY, layout.colW, layout.bodyH };
+    snapshot.pitchBendRangeBounds = pitchBendRangeDial.getBounds();
+    snapshot.glideTimeBounds = glideTimeDial.getBounds();
+    snapshot.modWheelTargetBounds = modWheelTargetSelector.getBounds();
+    snapshot.lfoVisualBounds = lfoVisual.getBounds();
+    snapshot.cutoffBounds = envDials[12].getBounds();
+    snapshot.resonanceBounds = resonanceDial.getBounds();
+    snapshot.monoModeBounds = monoModeSelector.getBounds();
+    snapshot.cutoffDisplayText = const_cast<juce::Slider&>(envDials[12])
+        .getTextFromValue(envDials[12].getValue());
+    snapshot.glideTimeDisplayText = const_cast<juce::Slider&>(glideTimeDial)
+        .getTextFromValue(glideTimeDial.getValue());
     snapshot.familyLabelBounds = familySelectorLbl.getBounds();
     snapshot.modelLabelBounds = modelSelectorLbl.getBounds();
     snapshot.modelSelectorBounds = modelSelector.getBounds();
     snapshot.fxLockVisible = fxLockButton.isVisible();
+    snapshot.lfoVisualVisible = lfoVisual.isVisible();
+
+    const auto addVisibleBounds = [](juce::Rectangle<int>& target, const juce::Component& component)
+    {
+        if (! component.isVisible() || component.getBounds().isEmpty())
+            return;
+
+        target = target.isEmpty()
+            ? component.getBounds()
+            : target.getUnion(component.getBounds());
+    };
+
+    addVisibleBounds(snapshot.performanceStripBounds, velocityCurveLabel);
+    addVisibleBounds(snapshot.performanceStripBounds, velocityCurveSelector);
+    addVisibleBounds(snapshot.performanceStripBounds, pitchBendRangeLabel);
+    addVisibleBounds(snapshot.performanceStripBounds, pitchBendRangeDial);
+    addVisibleBounds(snapshot.performanceStripBounds, glideTimeLabel);
+    addVisibleBounds(snapshot.performanceStripBounds, glideTimeDial);
+    addVisibleBounds(snapshot.performanceStripBounds, modWheelTargetLabel);
+    addVisibleBounds(snapshot.performanceStripBounds, modWheelTargetSelector);
 
     for (const auto& tab : familyTabs)
     {
@@ -1747,18 +1780,26 @@ void BassSynthAudioProcessorEditor::resized()
         envDials[si].setBounds(xk, yk + labelH, knobW, knobH);
     }
 
-    const int cutoffSize = juce::jlimit(layout.compact ? 66 : 72,
-                                        layout.roomy ? 116 : 104,
+    const int toneFooterGapY = layout.compact ? 6 : 14;
+    const int perfCtrlH = juce::jlimit(layout.compact ? 36 : 46,
+                                       layout.compact ? 52 : (layout.roomy ? 68 : 56),
+                                       knobH + (layout.compact ? -4 : 6));
+    const int cutoffY = col2StartY + 2 * (knobH + labelH + knobGapY) + (layout.compact ? 6 : 10);
+    const int cutoffMinSize = layout.compact ? 54 : 72;
+    const int cutoffMaxSize = layout.roomy ? 116 : 104;
+    const int cutoffMaxBeforeFooter = protectedKeyboardTop - 8 - (labelH + perfCtrlH) - toneFooterGapY - cutoffY - labelH;
+    const int cutoffUpperSize = juce::jlimit(cutoffMinSize,
+                                             cutoffMaxSize,
+                                             juce::jmax(cutoffMinSize, cutoffMaxBeforeFooter));
+    const int cutoffSize = juce::jlimit(cutoffMinSize,
+                                        cutoffUpperSize,
                                         knobH + (layout.compact ? 14 : 18));
     const int cutoffX = layout.col2X + (layout.colW - cutoffSize) / 2;
-    const int cutoffY = col2StartY + 2 * (knobH + labelH + knobGapY) + (layout.compact ? 6 : 10);
     envLabels[12].setBounds(cutoffX, cutoffY, cutoffSize, labelH);
     envDials[12].setBounds(cutoffX, cutoffY + labelH, cutoffSize, cutoffSize);
 
-    const int perfY = cutoffY + labelH + cutoffSize + (layout.compact ? 10 : 14);
-    const int perfCtrlH = juce::jlimit(layout.compact ? 40 : 46,
-                                       layout.roomy ? 68 : 56,
-                                       knobH + (layout.compact ? 2 : 6));
+    const int perfY = juce::jmin(cutoffY + labelH + cutoffSize + toneFooterGapY,
+                                 protectedKeyboardTop - 8 - labelH - perfCtrlH);
     const int toneFooterGap = interpolateGap(gapDensity, 10, 12, 14);
     const int toneFooterW = (layout.colW - cPad * 2 - toneFooterGap) / 2;
     resonanceLabel.setBounds(layout.col2X + cPad, perfY, toneFooterW, labelH);
@@ -1829,9 +1870,9 @@ void BassSynthAudioProcessorEditor::resized()
 
     const int macroGap = interpolateGap(gapDensity, 7, 9, 11);
     const int macroW = (layout.colW - cPad * 2 - macroGap * 3) / 4;
-    const int macroH = juce::jlimit(layout.compact ? 44 : 50,
-                                    layout.roomy ? 78 : 68,
-                                    juce::jmin(macroW, knobH - (layout.compact ? 6 : 10)));
+    const int macroH = juce::jlimit(layout.compact ? 40 : 50,
+                                    layout.compact ? 58 : (layout.roomy ? 78 : 68),
+                                    juce::jmin(macroW, knobH - (layout.compact ? 12 : 10)));
     for (int i = 0; i < kMacroVisible; ++i)
     {
         auto si = (size_t)i;
@@ -1878,7 +1919,7 @@ void BassSynthAudioProcessorEditor::resized()
     glideTimeDial.setVisible(true);
 
     const int perfGap = interpolateGap(gapDensity, 8, 10, 12);
-    const int perfControlH = layout.compact ? 24 : 26;
+    const int perfControlH = layout.compact ? 22 : 26;
     int perfStripBottom = sectionContentY;
 
     if (activeRightPanelSection == 0)
@@ -1895,7 +1936,7 @@ void BassSynthAudioProcessorEditor::resized()
         modWheelTargetLabel.setBounds(glideTimeDial.getRight() + perfGap, perfLabelY, perfW, 14);
         modWheelTargetSelector.setBounds(glideTimeDial.getRight() + perfGap, perfControlY, perfW, perfControlH);
 
-        const int modGapY = interpolateGap(gapDensity, 10, 12, 14);
+        const int modGapY = interpolateGap(gapDensity, 8, 12, 14);
         const int modY = juce::jmax(glideTimeDial.getBottom(), modWheelTargetSelector.getBottom()) + modGapY;
         const int topControlGap = layout.compact ? 8 : 10;
         const int halfW = (layout.colW - cPad * 2 - topControlGap) / 2;
@@ -1912,16 +1953,29 @@ void BassSynthAudioProcessorEditor::resized()
         lfoDestSelector.setBounds(layout.col3X + cPad, modY + 16, halfW, layout.compact ? 24 : 26);
         lfoWaveSelector.setBounds(layout.col3X + cPad + halfW + topControlGap, modY + 16, halfW, layout.compact ? 24 : 26);
         const int lfoDialY = lfoDestSelector.getBottom() + (layout.compact ? 8 : 10);
-        const int lfoDialH = juce::jlimit(layout.compact ? 42 : 48, layout.roomy ? 72 : 60, knobH - 4);
+        const int lfoDialH = juce::jlimit(layout.compact ? 38 : 48,
+                                          layout.compact ? 52 : (layout.roomy ? 72 : 60),
+                                          knobH - (layout.compact ? 14 : 4));
         lfoRateLabel.setBounds(layout.col3X + cPad, lfoDialY, halfW, 14);
         lfoDepthLabel.setBounds(layout.col3X + cPad + halfW + topControlGap, lfoDialY, halfW, 14);
         lfoRateDial.setBounds(layout.col3X + cPad, lfoDialY + 14, halfW, lfoDialH);
         lfoDepthDial.setBounds(layout.col3X + cPad + halfW + topControlGap, lfoDialY + 14, halfW, lfoDialH);
 
         const int lfoVisualY = lfoRateDial.getBottom() + (layout.compact ? 8 : 10);
-        const int lfoVisualH = juce::jmax(84, protectedKeyboardTop - lfoVisualY - 8);
-        lfoVisual.setVisible(true);
-        lfoVisual.setBounds(layout.col3X + cPad, lfoVisualY, layout.colW - cPad * 2, lfoVisualH);
+        const int lfoVisualBottomMargin = layout.compact ? 10 : 12;
+        const int lfoVisualAvailableH = protectedKeyboardTop - lfoVisualY - lfoVisualBottomMargin;
+        const int lfoVisualMinH = layout.compact ? 58 : 84;
+        if (lfoVisualAvailableH >= lfoVisualMinH)
+        {
+            lfoVisual.setVisible(true);
+            lfoVisual.setBounds(layout.col3X + cPad, lfoVisualY,
+                                layout.colW - cPad * 2, lfoVisualAvailableH);
+        }
+        else
+        {
+            lfoVisual.setVisible(false);
+            lfoVisual.setBounds(0, 0, 0, 0);
+        }
     }
     else
     {
@@ -2514,6 +2568,8 @@ void BassSynthAudioProcessorEditor::configureValueDisplays()
     auto setFrequencyDisplay = [&](juce::Slider& slider, int width = 96)
     {
         slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, width, 18);
+        slider.setNumDecimalPlacesToDisplay(0);
+        slider.setTextValueSuffix({});
         slider.textFromValueFunction = [](double value) { return formatFrequency(value); };
         slider.valueFromTextFunction = frequencyFromText;
     };
@@ -2558,6 +2614,8 @@ void BassSynthAudioProcessorEditor::configureValueDisplays()
     resonanceDial.valueFromTextFunction = percentFromText;
 
     glideTimeDial.setTextBoxStyle(juce::Slider::TextBoxLeft, false, 56, 22);
+    glideTimeDial.setNumDecimalPlacesToDisplay(2);
+    glideTimeDial.setTextValueSuffix({});
     glideTimeDial.textFromValueFunction = [](double value) { return formatSeconds(value); };
     glideTimeDial.valueFromTextFunction = secondsFromText;
 

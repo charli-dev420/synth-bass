@@ -61,11 +61,24 @@ public:
         juce::Rectangle<int> voiceBounds;
         juce::Rectangle<int> ccBounds;
         juce::Rectangle<int> fxLockBounds;
+        juce::Rectangle<int> keyboardBounds;
+        juce::Rectangle<int> rightPanelBounds;
+        juce::Rectangle<int> performanceStripBounds;
+        juce::Rectangle<int> pitchBendRangeBounds;
+        juce::Rectangle<int> glideTimeBounds;
+        juce::Rectangle<int> modWheelTargetBounds;
+        juce::Rectangle<int> lfoVisualBounds;
+        juce::Rectangle<int> cutoffBounds;
+        juce::Rectangle<int> resonanceBounds;
+        juce::Rectangle<int> monoModeBounds;
+        juce::String cutoffDisplayText;
+        juce::String glideTimeDisplayText;
         juce::Rectangle<int> familyLabelBounds;
         juce::Rectangle<int> familyTabsBounds;
         juce::Rectangle<int> modelLabelBounds;
         juce::Rectangle<int> modelSelectorBounds;
         bool fxLockVisible = false;
+        bool lfoVisualVisible = false;
     };
 
     LayoutSnapshot captureLayoutSnapshotForTests() const;

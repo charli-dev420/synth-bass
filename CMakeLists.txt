@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(UWdeVST_bass VERSION 1.0.1 LANGUAGES CXX)
+project(UWdeVST_bass VERSION 1.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,7 +51,7 @@ else()
 endif()
 
 juce_add_plugin(UWdeVST_bass
-    COMPANY_NAME "Musique"
+    COMPANY_NAME "unicorn who dev / Charli Billabert"
     BUNDLE_ID "com.uwdevst.bass"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -62,7 +62,7 @@ juce_add_plugin(UWdeVST_bass
     PLUGIN_MANUFACTURER_CODE MQBS
     PLUGIN_CODE MBS1
     FORMATS ${MBS_PLUGIN_FORMATS}
-    PRODUCT_NAME "UWdeVST_bass"
+    PRODUCT_NAME "uwdevst_bass"
     ICON_BIG   "${ASSETS_DIR}/logo,favic/logo_bass.png"
     ICON_SMALL "${ASSETS_DIR}/logo,favic/logo_bass.png"
 )
@@ -122,7 +122,7 @@ target_link_libraries(UWdeVST_bass PRIVATE
 )
 
 juce_add_console_app(UWdeVST_bass_renderer
-    PRODUCT_NAME "UWdeVST_bass_renderer"
+    PRODUCT_NAME "uwdevst_bass_renderer"
 )
 
 juce_generate_juce_header(UWdeVST_bass_renderer)
@@ -151,7 +151,7 @@ target_link_libraries(UWdeVST_bass_renderer PRIVATE
 )
 
 juce_add_console_app(UWdeVST_bass_tests
-    PRODUCT_NAME "UWdeVST_bass_tests"
+    PRODUCT_NAME "uwdevst_bass_tests"
 )
 
 juce_generate_juce_header(UWdeVST_bass_tests)

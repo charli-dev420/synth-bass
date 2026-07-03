@@ -1512,7 +1512,11 @@ float LfoModulationDisplay::sampleWave(float phase) const
 
 juce::Rectangle<float> LfoModulationDisplay::getHeaderBounds() const
 {
-    return getLocalBounds().toFloat().reduced(8.0f, 6.0f).removeFromTop(20.0f);
+    const auto height = static_cast<float>(getHeight());
+    const float horizontalInset = height < 76.0f ? 7.0f : 8.0f;
+    const float verticalInset = height < 76.0f ? 5.0f : 6.0f;
+    const float headerH = juce::jlimit(16.0f, 20.0f, height * 0.24f);
+    return getLocalBounds().toFloat().reduced(horizontalInset, verticalInset).removeFromTop(headerH);
 }
 
 juce::Rectangle<float> LfoModulationDisplay::getWaveChipBounds(const int index) const
@@ -1547,9 +1551,9 @@ int LfoModulationDisplay::hitTestWaveformChip(const juce::Point<float> position)
 
 juce::Rectangle<float> LfoModulationDisplay::getPlotBounds() const
 {
-    auto bounds = getLocalBounds().toFloat().reduced(10.0f, 9.0f);
-    const float topTrim = juce::jlimit(22.0f, 34.0f, bounds.getHeight() * 0.24f);
-    const float bottomTrim = juce::jlimit(16.0f, 28.0f, bounds.getHeight() * 0.20f);
+    auto bounds = getLocalBounds().toFloat().reduced(10.0f, getHeight() < 76 ? 7.0f : 9.0f);
+    const float topTrim = juce::jlimit(18.0f, 34.0f, bounds.getHeight() * 0.24f);
+    const float bottomTrim = juce::jlimit(14.0f, 28.0f, bounds.getHeight() * 0.18f);
     return bounds.withTrimmedTop(topTrim).withTrimmedBottom(bottomTrim);
 }
 
@@ -1669,9 +1673,9 @@ void LfoModulationDisplay::paint(juce::Graphics& g)
     g.setColour(synthcol::text);
     g.fillEllipse(controlX - 2.2f, controlY - 2.2f, 4.4f, 4.4f);
 
-    auto footer = getLocalBounds().reduced(10, 6);
+    auto footer = getLocalBounds().reduced(10, getHeight() < 76 ? 5 : 6).removeFromBottom(getHeight() < 76 ? 12 : 14);
     g.setColour(synthcol::textDim);
-    g.setFont(juce::Font(juce::FontOptions{}.withHeight(getHeight() < 120 ? 8.0f : 8.5f).withStyle("Bold")));
+    g.setFont(juce::Font(juce::FontOptions{}.withHeight(getHeight() < 76 ? 7.6f : (getHeight() < 120 ? 8.0f : 8.5f)).withStyle("Bold")));
     const int footerW = footer.getWidth();
     const int depthW = juce::jlimit(56, 100, static_cast<int>(footerW * 0.40f));
     const int rateW = juce::jmax(50, footerW - depthW - 8);
