@@ -1,4 +1,6 @@
 #include <JuceHeader.h>
+#include "../PluginProcessor.h"
+#include "../../../../Shared/AudioQaRendererJob.h"
 
 #include "../Engine/BassDefs.h"
 #include "../Engine/BassVoice.h"
@@ -2338,6 +2340,12 @@ int main(int argc, char* argv[])
     }
 
     const juce::String firstArg(argv[1]);
+    if (firstArg == "--audioqa-job")
+    {
+        if (argc < 5 || juce::String(argv[3]) != "--result") return 1;
+        try { return musique::audioqa::runRendererJob<BassSynthAudioProcessor>(juce::File(argv[2]), juce::File(argv[4]), "uwdevst_bass", "UWdeVST_bass_renderer"); }
+        catch (const std::exception& e) { std::cerr << "AudioQA job error: " << e.what() << "\n"; return 1; }
+    }
     if (firstArg == "--export-candidate-presets")
     {
         auto outputBase = juce::File::getCurrentWorkingDirectory().getChildFile("build/codex_audit");

@@ -129,12 +129,18 @@ juce_generate_juce_header(UWdeVST_bass_renderer)
 
 target_sources(UWdeVST_bass_renderer PRIVATE
     Source/Render/BassManifestRenderer.cpp
+    Source/PluginEditor.cpp
+    Source/PluginEditor.h
+    Source/PluginProcessor.cpp
+    Source/PluginProcessor.h
     Source/Engine/BassDefs.cpp
     Source/Engine/BassDefs.h
     Source/Engine/BassVoice.cpp
     Source/Engine/BassVoice.h
     Source/Engine/FactoryPresets.cpp
     Source/Engine/FactoryPresets.h
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.h"
 )
 
 target_compile_definitions(UWdeVST_bass_renderer PRIVATE
@@ -143,6 +149,8 @@ target_compile_definitions(UWdeVST_bass_renderer PRIVATE
 )
 
 target_link_libraries(UWdeVST_bass_renderer PRIVATE
+    BassAssets
+    juce::juce_audio_utils
     juce::juce_audio_formats
     juce::juce_dsp
     juce::juce_recommended_config_flags
