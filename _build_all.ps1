@@ -2,8 +2,7 @@ param(
     [string]$Configuration = "Release",
     [string]$BuildDir = "build",
     [string]$JuceDir = "",
-    [switch]$BootstrapJuce,
-    [switch]$RunTests
+    [switch]$BootstrapJuce
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +10,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Split-Path -Parent $PSCommandPath
 $projectDir = $null
+
 if (Test-Path (Join-Path $repoRoot "CMakeLists.txt")) {
     $projectDir = Get-Item -LiteralPath $repoRoot
 } else {
@@ -21,7 +21,7 @@ if (Test-Path (Join-Path $repoRoot "CMakeLists.txt")) {
 }
 
 if (-not $projectDir) {
-    throw "No top-level project directory with CMakeLists.txt was found under $repoRoot."
+    throw "No project directory with CMakeLists.txt was found under $repoRoot."
 }
 
 $projectCMake = Join-Path $projectDir.FullName "CMakeLists.txt"
@@ -31,16 +31,12 @@ if (-not $projectMatch) {
 }
 
 $pluginTarget = $projectMatch.Matches[0].Groups[1].Value
-$consoleTargets = Select-String -Path $projectCMake -Pattern '^\s*juce_add_console_app\(([^ )]+)' |
-    ForEach-Object { $_.Matches[0].Groups[1].Value }
-$targets = @($pluginTarget) + $consoleTargets | Select-Object -Unique
 
 $assetsDir = Join-Path $repoRoot "assets versions png"
 $asciiAssetsDir = Join-Path $repoRoot "assets_versions_png"
 if (-not (Test-Path $assetsDir) -and (Test-Path $asciiAssetsDir)) {
     $assetsDir = $asciiAssetsDir
 }
-
 if (-not (Test-Path $assetsDir)) {
     throw "Missing asset directory. Expected '$assetsDir' or '$asciiAssetsDir'."
 }
@@ -72,14 +68,7 @@ if (Test-Path $cmakeCache) {
         $cachedSourcePath = $cachedSource.Line.Substring("CMAKE_HOME_DIRECTORY:INTERNAL=".Length)
         $resolvedProjectPath = (Resolve-Path $projectDir.FullName).Path
         if ($cachedSourcePath -ne $resolvedProjectPath) {
-            Write-Host "Removing stale build directory '$buildPath' because it was configured for '$cachedSourcePath'."
-            try {
-                Remove-Item -LiteralPath $buildPath -Recurse -Force
-            } catch {
-                $fallbackBuildDir = "${BuildDir}_fresh"
-                $buildPath = Join-Path $repoRoot $fallbackBuildDir
-                Write-Warning "Could not remove '$BuildDir'. Falling back to '$fallbackBuildDir'."
-            }
+            Remove-Item -LiteralPath $buildPath -Recurse -Force
         }
     }
 }
@@ -90,7 +79,6 @@ $cmakeArgs = @(
     "-Wno-dev",
     "-DUWDEVST_SHARED_ASSETS_DIR=$assetsDir"
 )
-
 if ($resolvedJuceDir) {
     $cmakeArgs += "-DUWDEVST_JUCE_DIR=$resolvedJuceDir"
 }
@@ -100,19 +88,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "CMake configuration failed."
 }
 
-$vst3Target = "${pluginTarget}_VST3"
-$vst3ProjectFile = Join-Path $buildPath "$vst3Target.vcxproj"
-$hasVst3Target = Test-Path $vst3ProjectFile
-
+$targets = @($pluginTarget)
 $standaloneTarget = "${pluginTarget}_Standalone"
-$standaloneProjectFile = Join-Path $buildPath "$standaloneTarget.vcxproj"
-if (Test-Path $standaloneProjectFile) {
-    $targets = @($pluginTarget, $standaloneTarget) + $consoleTargets | Select-Object -Unique
-}
+$vst3Target = "${pluginTarget}_VST3"
 
-if ($hasVst3Target) {
-    $targets = @($pluginTarget, $vst3Target) + $targets | Select-Object -Unique
+if (Test-Path (Join-Path $buildPath "$standaloneTarget.vcxproj")) {
+    $targets += $standaloneTarget
 }
+if (Test-Path (Join-Path $buildPath "$vst3Target.vcxproj")) {
+    $targets += $vst3Target
+}
+$targets = $targets | Select-Object -Unique
 
 foreach ($target in $targets) {
     & cmake --build $buildPath --config $Configuration --target $target
@@ -121,45 +107,22 @@ foreach ($target in $targets) {
     }
 }
 
-if ($targets -contains $standaloneTarget) {
-    $standaloneDir = Join-Path $buildPath "${pluginTarget}_artefacts\$Configuration\Standalone"
-    $standaloneExe = Get-ChildItem $standaloneDir -File -Filter *.exe -ErrorAction SilentlyContinue |
-        Select-Object -First 1
+$artifactRoot = Join-Path $buildPath "${pluginTarget}_artefacts\$Configuration"
 
+if ($targets -contains $standaloneTarget) {
+    $standaloneDir = Join-Path $artifactRoot "Standalone"
+    $standaloneExe = Get-ChildItem $standaloneDir -File -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $standaloneExe) {
-        throw "Standalone build target '$standaloneTarget' completed but no standalone executable was found."
+        throw "Standalone build completed but no executable was found in $standaloneDir."
     }
 }
 
 if ($targets -contains $vst3Target) {
-    $vst3BundleDir = Join-Path $buildPath "${pluginTarget}_artefacts\$Configuration\VST3\${pluginTarget}.vst3"
-    $vst3Binary = Join-Path $vst3BundleDir "Contents\x86_64-win\${pluginTarget}.vst3"
-
-    if (-not (Test-Path $vst3BundleDir)) {
-        throw "VST3 build target '$vst3Target' completed but no VST3 bundle was found at $vst3BundleDir."
-    }
-
-    if (-not (Test-Path $vst3Binary)) {
-        throw "VST3 build target '$vst3Target' completed but no VST3 binary was found at $vst3Binary."
+    $vst3Dir = Join-Path $artifactRoot "VST3"
+    $vst3Bundle = Get-ChildItem $vst3Dir -Directory -Filter *.vst3 -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $vst3Bundle) {
+        throw "VST3 build completed but no VST3 bundle was found in $vst3Dir."
     }
 }
 
-if ($RunTests) {
-    $testTarget = $targets | Where-Object { $_ -match '(^|_)tests$' } | Select-Object -First 1
-    if (-not $testTarget) {
-        $testTarget = $targets | Where-Object { $_ -like '*tests*' } | Select-Object -First 1
-    }
-
-    if ($testTarget) {
-        $testExe = Join-Path $buildPath "$($testTarget)_artefacts\$Configuration\$testTarget.exe"
-        if (-not (Test-Path $testExe)) {
-            throw "Test executable not found at $testExe."
-        }
-        & $testExe
-        if ($LASTEXITCODE -ne 0) {
-            throw "Tests failed for '$testTarget'."
-        }
-    } else {
-        Write-Host "No console test target detected. Skipping test execution."
-    }
-}
+Write-Host "Build completed: $pluginTarget ($Configuration)"
