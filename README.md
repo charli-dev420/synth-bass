@@ -1,50 +1,48 @@
-# synth-bass
+# uwdevst_bass
 
-Individually reproducible split repository generated from the main `musique/synth` workspace.
+Free Windows x64 bass synthesizer from the UWdeVST collection.
 
-## Layout
-- the single top-level project directory contains the JUCE/CMake project
-- `Shared/` contains the shared runtime code copied from the main workspace
-- `new composants/` contains the shared UI component snapshot used by the export
-- `qa/` contains only useful QA scripts in this source tree; current renders live in the repository root `qa/`
-- `assets versions png/` contains the minimal asset subset required by this repo
+`uwdevst_bass` is a lightweight synthetic bass instrument designed for production, sketching and low-end sound design. It is not a sampled bass library or a physical emulation of a specific commercial instrument.
 
-## Build
-From the repository root:
+## Features
 
-```powershell
-.\_build_all.ps1 -Configuration Release
-```
+- 9 bass instruments across 3 families
+- 18 factory presets (`Reference` and `Signature`)
+- Standalone application and VST3 plugin
+- Windows x64
+- JUCE 8.0.4 / CMake project
 
-Use an existing JUCE checkout explicitly:
+## Download
 
-```powershell
-.\_build_all.ps1 -Configuration Release -JuceDir D:\Dev\JUCE
-```
+Ready-to-use builds are distributed through the repository **Releases** page. Use the release installer/package instead of downloading build artefacts from the source tree.
 
-Bootstrap JUCE locally inside the repo when needed:
+## Build from source
+
+Requirements: Windows x64, CMake 3.22+, Visual Studio 2022 with the C++ desktop workload, Git and PowerShell.
 
 ```powershell
 .\_build_all.ps1 -Configuration Release -BootstrapJuce
 ```
 
-Add `-RunTests` to execute the exported console test target after the build.
-
-## Notes
-- JUCE is intentionally not committed in this export; `_build_all.ps1` can use an existing checkout or clone `8.0.4` into `JUCE/`.
-- The repo carries the asset files referenced by its exported `CMakeLists.txt`, so no sibling monorepo folders are required.
-- Current per-instrument preset notes live in the repository root `docs/`.
-- Positionnement release: multi-basse synthetique de production / bass sketch / low-end design. Ne pas presenter comme une emulation realiste premium type MODO Bass, Trilian ou banque multisamplee.
-- Contrat release: 9 basses, 3 familles, 18 presets factory: 2 par basse (`Reference` et `Signature`).
-
-## QA candidate courante
+You can also point the script to an existing JUCE 8.0.4 checkout:
 
 ```powershell
-.\_build_all.ps1 -Configuration Release -RunTests
-.\build\UWdeVST_bass_renderer_artefacts\Release\UWdeVST_bass_renderer.exe --export-candidate-presets --output-base build\codex_audit --overwrite
-.\build\UWdeVST_bass_renderer_artefacts\Release\UWdeVST_bass_renderer.exe --render-xml-previews --preset-dir build\codex_audit\bass_candidate_presets --output-base qa\current_candidate_preview_renders_2026-05-31 --overwrite
-.\build\UWdeVST_bass_renderer_artefacts\Release\UWdeVST_bass_renderer.exe --strict-chord-audit --preset-dir build\codex_audit\bass_candidate_presets --output-base qa\current_candidate_chords_2026-05-31 --report qa\current_candidate_strict_chord_2026-05-31.csv --overwrite
-.\build\UWdeVST_bass_renderer_artefacts\Release\UWdeVST_bass_renderer.exe --audit-audio --preset-dir build\codex_audit\bass_candidate_presets --output-base qa\current_candidate_audit_audio_2026-05-31 --report qa\current_candidate_audit_audio_2026-05-31.csv --overwrite
+.\_build_all.ps1 -Configuration Release -JuceDir C:\Dev\JUCE
 ```
 
-Le gate d'ecoute humaine reste bloquant avant diffusion externe: aucun verdict `P0-regression` ou `P1-blocker`.
+The public build only contains the product targets required for the Standalone and VST3 versions. Internal renderers, QA tools and production-test targets are intentionally not part of this repository.
+
+## Repository layout
+
+- `Source/` — plugin and synthesis engine
+- `Shared/` — shared runtime code required by this standalone repository
+- `assets versions png/` — UI assets required by the build
+- `new composants/` — shared UI components required by the build
+
+## License
+
+The plugin is free to download and use. The source code is **source-available**, not open source. Local inspection, personal modification and personal builds are permitted under [LICENSE.md](LICENSE.md). Redistribution, repackaging and commercial reuse of the source require prior permission.
+
+JUCE is not included in this repository and remains subject to its own licence terms.
+
+Copyright © 2026 Charli Billabert / unicorn who dev.

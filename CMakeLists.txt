@@ -7,11 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(MBS_ENABLE_VST2 "Enable legacy VST2 format (requires legacy JUCE + VST2 SDK)" OFF)
-
-# ---------------------------------------------------------------------------
-# JUCE: use an explicit checkout when provided, otherwise fall back to a
-# repository-local copy or FetchContent.
-# ---------------------------------------------------------------------------
 set(UWDEVST_JUCE_DIR "" CACHE PATH "Optional path to a JUCE checkout to use instead of FetchContent")
 
 if (UWDEVST_JUCE_DIR AND EXISTS "${UWDEVST_JUCE_DIR}/CMakeLists.txt")
@@ -37,10 +32,6 @@ endif()
 set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets versions png")
 if (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets_versions_png")
     set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets_versions_png")
-elseif (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
-    set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets versions png")
-elseif (NOT EXISTS "${_uwdevst_default_assets_dir}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
-    set(_uwdevst_default_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/../assets_versions_png")
 endif()
 
 set(UWDEVST_SHARED_ASSETS_DIR "${_uwdevst_default_assets_dir}" CACHE PATH "Path to the shared UI/assets directory")
@@ -92,9 +83,6 @@ target_compile_definitions(UWdeVST_bass PRIVATE
     JUCE_REPORT_APP_USAGE=0
 )
 
-# ---------------------------------------------------------------------------
-# MSVC: Release optimizations
-# ---------------------------------------------------------------------------
 if (MSVC)
     target_compile_options(UWdeVST_bass PRIVATE
         /utf-8
@@ -103,90 +91,13 @@ if (MSVC)
     target_link_options(UWdeVST_bass PRIVATE
         $<$<CONFIG:Release>:/LTCG>
     )
-endif ()
+endif()
 
-# ---------------------------------------------------------------------------
-# Binary assets (background texture only — icons not rendered in current UI)
-# ---------------------------------------------------------------------------
 juce_add_binary_data(BassAssets SOURCES
     "${ASSETS_DIR}/fond_basse.png"
 )
 
 target_link_libraries(UWdeVST_bass PRIVATE
-    BassAssets
-    juce::juce_audio_utils
-    juce::juce_dsp
-    juce::juce_recommended_config_flags
-    juce::juce_recommended_warning_flags
-    juce::juce_recommended_lto_flags
-)
-
-juce_add_console_app(UWdeVST_bass_renderer
-    PRODUCT_NAME "uwdevst_bass_renderer"
-)
-
-juce_generate_juce_header(UWdeVST_bass_renderer)
-
-target_sources(UWdeVST_bass_renderer PRIVATE
-    Source/Render/BassManifestRenderer.cpp
-    Source/PluginEditor.cpp
-    Source/PluginEditor.h
-    Source/PluginProcessor.cpp
-    Source/PluginProcessor.h
-    Source/Engine/BassDefs.cpp
-    Source/Engine/BassDefs.h
-    Source/Engine/BassVoice.cpp
-    Source/Engine/BassVoice.h
-    Source/Engine/FactoryPresets.cpp
-    Source/Engine/FactoryPresets.h
-    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.h"
-)
-
-target_compile_definitions(UWdeVST_bass_renderer PRIVATE
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-)
-
-target_link_libraries(UWdeVST_bass_renderer PRIVATE
-    BassAssets
-    juce::juce_audio_utils
-    juce::juce_audio_formats
-    juce::juce_dsp
-    juce::juce_recommended_config_flags
-    juce::juce_recommended_warning_flags
-    juce::juce_recommended_lto_flags
-)
-
-juce_add_console_app(UWdeVST_bass_tests
-    PRODUCT_NAME "uwdevst_bass_tests"
-)
-
-juce_generate_juce_header(UWdeVST_bass_tests)
-
-target_sources(UWdeVST_bass_tests PRIVATE
-    Source/Tests/BassProductionTests.cpp
-    Source/PluginEditor.cpp
-    Source/PluginEditor.h
-    Source/PluginProcessor.cpp
-    Source/PluginProcessor.h
-    Source/Engine/BassDefs.cpp
-    Source/Engine/BassDefs.h
-    Source/Engine/BassVoice.cpp
-    Source/Engine/BassVoice.h
-    Source/Engine/FactoryPresets.cpp
-    Source/Engine/FactoryPresets.h
-    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Shared/SynthCommon.h"
-)
-
-target_compile_definitions(UWdeVST_bass_tests PRIVATE
-    JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0
-    UWDEVST_BASS_TEST_BUILD=1
-)
-
-target_link_libraries(UWdeVST_bass_tests PRIVATE
     BassAssets
     juce::juce_audio_utils
     juce::juce_dsp
